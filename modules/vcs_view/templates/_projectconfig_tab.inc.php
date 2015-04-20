@@ -1,0 +1,1 @@
+<li id="tab_vcsv"<?php if ($selected_tab == 'vcsv'): ?> class="selected"<?php endif; ?>><?php echo javascript_link_tag(__('VCS View'), array('onclick' => "TBG.Main.Helpers.tabSwitcher('tab_vcsv', 'project_config_menu');")); ?></li>

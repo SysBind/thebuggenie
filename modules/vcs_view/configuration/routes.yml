@@ -1,0 +1,6 @@
+configure_vcsv_settings:
+  route: /configure/project/:project_id/vcsv
+  action: configureProjectSettings
+  parameters:
+    config_module: core
+    section: 16

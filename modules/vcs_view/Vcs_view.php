@@ -41,6 +41,16 @@
         protected $_module_config_description = 'Configure repository settings for source code view';
         protected $_has_config_settings = false;
 
+        /**
+         * Return an instance of this module
+         *
+         * @return Vcs_view_sample
+         */
+        public static function getModule()
+        {
+            return framework\Context::getModule('vcs_view');
+        }
+        
         protected function _initialize()
         {
 
@@ -53,9 +63,6 @@
 
         protected function _loadFixtures($scope)
         {
-            Commits::getTable()->createIndexes();
-            Files::getTable()->createIndexes();
-            IssueLinks::getTable()->createIndexes();
         }
 
         protected function _addListeners()
