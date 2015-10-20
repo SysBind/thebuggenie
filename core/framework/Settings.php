@@ -36,6 +36,7 @@
         const CONFIGURATION_SECTION_ISSUETYPES = 6;
         const CONFIGURATION_SECTION_PROJECTS = 10;
         const CONFIGURATION_SECTION_SETTINGS = 12;
+        const CONFIGURATION_SECTION_THEMES = 18;
         const CONFIGURATION_SECTION_SCOPES = 14;
         const CONFIGURATION_SECTION_MODULES = 15;
         const CONFIGURATION_SECTION_IMPORT = 16;
@@ -84,6 +85,7 @@
         const SETTING_IS_PERMISSIVE_MODE = 'permissive';
         const SETTING_IS_SINGLE_PROJECT_TRACKER = 'singleprojecttracker';
         const SETTING_KEEP_COMMENT_TRAIL_CLEAN = 'cleancomments';
+        const SETTING_NOTIFICATION_POLL_INTERVAL = 'notificationpollinterval';
         const SETTING_OFFLINESTATE = 'offlinestate';
         const SETTING_ONLINESTATE = 'onlinestate';
         const SETTING_PREVIEW_COMMENT_IMAGES = 'previewcommentimages';
@@ -106,6 +108,9 @@
         const SETTING_UPLOAD_MAX_FILE_SIZE = 'upload_max_file_size';
         const SETTING_UPLOAD_RESTRICTION_MODE = 'upload_restriction_mode';
         const SETTING_UPLOAD_STORAGE = 'upload_storage';
+        const SETTING_UPLOAD_ALLOW_IMAGE_CACHING = 'upload_allow_image_caching';
+        const SETTING_UPLOAD_DELIVERY_USE_XSEND = 'upload_delivery_use_xsend';
+        const SETTING_USER_DISPLAYNAME_FORMAT = 'user_displayname_format';
         const SETTING_USER_GROUP = 'defaultgroup';
         const SETTING_USER_TIMEZONE = 'timezone';
         const SETTING_USER_KEYBOARD_NAVIGATION = 'keyboard_navigation';
@@ -123,10 +128,13 @@
 
         const USER_RSS_KEY = 'rsskey';
 
+        const USER_DISPLAYNAME_FORMAT_REALNAME = 1;
+        const USER_DISPLAYNAME_FORMAT_BUDDY = 0;
+
         protected static $_ver_mj = 4;
-        protected static $_ver_mn = 0;
-        protected static $_ver_rev = '0-RC2';
-        protected static $_ver_name = "Libertas quae sera tamen";
+        protected static $_ver_mn = 1;
+        protected static $_ver_rev = '0';
+        protected static $_ver_name = "Abstract Apricot";
         protected static $_defaultscope = null;
         protected static $_settings = null;
 
@@ -138,6 +146,7 @@
         protected static $_loadedsettings = array();
 
         protected static $_core_workflow = null;
+        protected static $_verified_theme = false;
         protected static $_core_workflowscheme = null;
         protected static $_core_issuetypescheme = null;
 
@@ -215,6 +224,12 @@
             {
                 self::$_settings[$module][$name][$uid] = $value;
             }
+        }
+
+        public static function copyDefaultScopeSetting($name, $module = 'core')
+        {
+            $setting = self::_loadSetting($name, $module, self::getDefaultScopeID());
+            self::saveSetting($name, $setting[0], $module, Context::getScope()->getID());
         }
 
         public static function get($name, $module = 'core', $scope = null, $uid = 0)
@@ -331,7 +346,7 @@
             $crit->addWhere(tables\Settings::UID, $uid);
 
             tables\Settings::getTable()->doDelete($crit);
-            unset(self::$_settings[$name][$uid]);
+            unset(self::$_settings[$module][$name][$uid]);
         }
 
         private static function _loadSetting($name, $module = 'core', $scope = 0)
@@ -408,6 +423,14 @@
                 return false; // No openID when using external auth
             }
             return (bool) self::isPersonaEnabled();
+        }
+
+        public static function getUserDisplaynameFormat()
+        {
+            $format = self::get(self::SETTING_USER_DISPLAYNAME_FORMAT);
+            if (!is_numeric($format))
+                $format = 0;
+            return (int) $format;
         }
 
         public static function isGravatarsEnabled()
@@ -498,12 +521,27 @@
 
         public static function getThemeName()
         {
-            return self::get(self::SETTING_THEME_NAME);
+            $themename = self::get(self::SETTING_THEME_NAME);
+            if (!self::$_verified_theme) {
+                if (!file_exists(THEBUGGENIE_PATH . 'themes' . DS . $themename . DS . 'theme.php')) {
+                    self::saveSetting(self::SETTING_THEME_NAME, 'oxygen');
+                    $themename = 'oxygen';
+                }
+                self::$_verified_theme = true;
+            }
+
+            return $themename;
         }
 
         public static function getIconsetName()
         {
             return self::get(self::SETTING_ICONSET);
+        }
+
+        public static function setIconsetName($iconset)
+        {
+            self::loadSettings();
+            self::$_settings['core'][self::SETTING_ICONSET][0] = $iconset;
         }
 
         public static function isUserThemesEnabled()
@@ -707,6 +745,18 @@
             return (bool) (Context::getScope()->isUploadsEnabled() && self::get(self::SETTING_ENABLE_UPLOADS));
         }
 
+        public static function isUploadsImageCachingEnabled()
+        {
+            $caching = self::get(self::SETTING_UPLOAD_ALLOW_IMAGE_CACHING);
+            return (($caching == null) ? false : (bool) $caching);
+        }
+
+        public static function isUploadsDeliveryUseXsend()
+        {
+            $useXsend = self::get(self::SETTING_UPLOAD_DELIVERY_USE_XSEND);
+            return (($useXsend == null) ? false : (bool) $useXsend);
+        }
+
         public static function getUploadsMaxSize($bytes = false)
         {
             return ($bytes) ? (int) (self::get(self::SETTING_UPLOAD_MAX_FILE_SIZE) * 1024 * 1024) : (int) self::get(self::SETTING_UPLOAD_MAX_FILE_SIZE);
@@ -852,7 +902,7 @@
          * Return syntax value for a given syntax shorthand
          *
          * @param string $syntax
-         * 
+         *
          * @return integer
          */
         public static function getSyntaxValue($syntax)
@@ -870,8 +920,19 @@
         }
 
         /**
+         * Notification polling interval in seconds
+         *
+         * @return integer
+         */
+        public static function getNotificationPollInterval()
+        {
+            $seconds = self::get(self::SETTING_NOTIFICATION_POLL_INTERVAL);
+            return $seconds == null ? 10 : $seconds;
+        }
+
+        /**
          * Whether or not the authentication backend is external
-         * 
+         *
          * @return boolean
          */
         public static function isUsingExternalAuthenticationBackend()
@@ -951,20 +1012,20 @@
                 $config_sections['general'][self::CONFIGURATION_SECTION_SCOPES] = array('route' => 'configure_scopes', 'description' => $i18n->__('Scopes'), 'icon' => 'scopes', 'details' => $i18n->__('Scopes are self-contained Bug Genie environments. Configure them here.'));
 
             $config_sections['general'][self::CONFIGURATION_SECTION_SETTINGS] = array('route' => 'configure_settings', 'description' => $i18n->__('Settings'), 'icon' => 'general_small', 'details' => $i18n->__('Every setting in the bug genie can be adjusted in this section.'));
-//            $config_sections['general'][self::CONFIGURATION_SECTION_PERMISSIONS] = array('route' => 'configure_permissions', 'description' => $i18n->__('Permissions'), 'icon' => 'permissions', 'details' => $i18n->__('Configure permissions in this section'));
+            $config_sections['general'][self::CONFIGURATION_SECTION_THEMES] = array('route' => 'configuration_themes', 'description' => $i18n->__('Theme'), 'icon' => 'themes', 'details' => $i18n->__('Configure the selected theme from this section'));
             $config_sections['general'][self::CONFIGURATION_SECTION_ROLES] = array('route' => 'configure_roles', 'description' => $i18n->__('Roles'), 'icon' => 'roles', 'details' => $i18n->__('Configure roles in this section'));
             $config_sections['general'][self::CONFIGURATION_SECTION_AUTHENTICATION] = array('route' => 'configure_authentication', 'description' => $i18n->__('Authentication'), 'icon' => 'authentication', 'details' => $i18n->__('Configure the authentication method in this section'));
 
             if (Context::getScope()->isUploadsEnabled())
-                $config_sections['general'][self::CONFIGURATION_SECTION_UPLOADS] = array('route' => 'configure_files', 'description' => $i18n->__('Uploads &amp; attachments'), 'icon' => 'files', 'details' => $i18n->__('All settings related to file uploads are controlled from this section.'));
+                $config_sections['general'][self::CONFIGURATION_SECTION_UPLOADS] = array('route' => 'configure_files', 'description' => $i18n->__('Uploads and attachments'), 'icon' => 'files', 'details' => $i18n->__('All settings related to file uploads are controlled from this section.'));
 
             $config_sections['general'][self::CONFIGURATION_SECTION_IMPORT] = array('route' => 'import_home', 'description' => $i18n->__('Import data'), 'icon' => 'import_small', 'details' => $i18n->__('Import data from CSV files and other sources.'));
             $config_sections['general'][self::CONFIGURATION_SECTION_PROJECTS] = array('route' => 'configure_projects', 'description' => $i18n->__('Projects'), 'icon' => 'projects', 'details' => $i18n->__('Set up all projects in this configuration section.'));
             $config_sections['general'][self::CONFIGURATION_SECTION_ISSUETYPES] = array('route' => 'configure_issuetypes', 'icon' => 'issuetypes', 'description' => $i18n->__('Issue types'), 'details' => $i18n->__('Manage issue types and configure issue fields for each issue type here'));
             $config_sections['general'][self::CONFIGURATION_SECTION_ISSUEFIELDS] = array('route' => 'configure_issuefields', 'icon' => 'resolutiontypes', 'description' => $i18n->__('Issue fields'), 'details' => $i18n->__('Status types, resolution types, categories, custom fields, etc. are configurable from this section.'));
             $config_sections['general'][self::CONFIGURATION_SECTION_WORKFLOW] = array('route' => 'configure_workflow', 'icon' => 'workflow', 'description' => $i18n->__('Workflow'), 'details' => $i18n->__('Set up and edit workflow configuration from this section'));
-            $config_sections['general'][self::CONFIGURATION_SECTION_USERS] = array('route' => 'configure_users', 'description' => $i18n->__('Users, teams &amp; clients'), 'icon' => 'users', 'details' => $i18n->__('Manage users, user teams and clients from this section.'));
-            $config_sections[self::CONFIGURATION_SECTION_MODULES][] = array('route' => 'configure_modules', 'description' => $i18n->__('Module settings'), 'icon' => 'modules', 'details' => $i18n->__('Manage Bug Genie extensions from this section. New modules are installed from here.'), 'module' => 'core');
+            $config_sections['general'][self::CONFIGURATION_SECTION_USERS] = array('route' => 'configure_users', 'description' => $i18n->__('Users, teams and clients'), 'icon' => 'users', 'details' => $i18n->__('Manage users, user teams and clients from this section.'));
+            $config_sections['general'][self::CONFIGURATION_SECTION_MODULES] = array('route' => 'configure_modules', 'description' => $i18n->__('Manage modules'), 'icon' => 'modules', 'details' => $i18n->__('Manage Bug Genie extensions from this section. New modules are installed from here.'), 'module' => 'core');
             foreach (Context::getModules() as $module)
             {
                 if ($module->hasConfigSettings() && $module->isEnabled())

@@ -10,7 +10,7 @@
     }
     if (\thebuggenie\core\framework\Context::isProjectContext())
     {
-        $tbg_response->addBreadcrumb(__('Issues'), make_url('project_issues', array('project_key' => \thebuggenie\core\framework\Context::getCurrentProject()->getKey())), tbg_get_breadcrumblinks('project_summary', \thebuggenie\core\framework\Context::getCurrentProject()));
+        $tbg_response->addBreadcrumb(__('Issues'), make_url('project_issues', array('project_key' => \thebuggenie\core\framework\Context::getCurrentProject()->getKey())));
         $tbg_response->addFeed(make_url('project_open_issues', array('project_key' => \thebuggenie\core\framework\Context::getCurrentProject()->getKey(), 'format' => 'rss')), __('Open issues for %project_name', array('%project_name' => \thebuggenie\core\framework\Context::getCurrentProject()->getName())));
         $tbg_response->addFeed(make_url('project_allopen_issues', array('project_key' => \thebuggenie\core\framework\Context::getCurrentProject()->getKey(), 'format' => 'rss')), __('Open issues for %project_name (including subprojects)', array('%project_name' => \thebuggenie\core\framework\Context::getCurrentProject()->getName())));
         $tbg_response->addFeed(make_url('project_closed_issues', array('project_key' => \thebuggenie\core\framework\Context::getCurrentProject()->getKey(), 'format' => 'rss')), __('Closed issues for %project_name', array('%project_name' => \thebuggenie\core\framework\Context::getCurrentProject()->getName())));
@@ -28,7 +28,7 @@
     }
     else
     {
-        $tbg_response->addBreadcrumb(__('Issues'), make_url('search'), tbg_get_breadcrumblinks('main_links'));
+        $tbg_response->addBreadcrumb(__('Issues'), make_url('search'));
         if (!\thebuggenie\core\entities\User::isThisGuest())
         {
             $tbg_response->addFeed(make_url('my_reported_issues', array('format' => 'rss')), __('Issues reported by me'));
@@ -55,7 +55,7 @@
                 </div>
             <?php endif; ?>
             <div class="results_header">
-                <span id="findissues_search_title" style="<?php if (!$searchtitle) echo 'display: none'; ?>"><?php echo __($searchtitle); ?></span>
+                <span id="findissues_search_title" style="<?php if (!$searchtitle) echo 'display: none'; ?>"><?php echo $searchtitle; ?></span>
                 <span id="findissues_search_generictitle" style="<?php if ($searchtitle) echo 'display: none'; ?>"><?php echo __("Find issues"); ?></span>
                 &nbsp;&nbsp;<span id="findissues_num_results" class="faded_out" style="<?php if (!$show_results) echo 'display: none;'; ?>"><?php echo __('%number_of issue(s)', array('%number_of' => '<span id="findissues_num_results_span">-</span>')); ?></span>
             </div>
@@ -76,7 +76,15 @@
                         <?php endif; ?>
                         <?php if ($show_results): ?>
                             setTimeout(function() { TBG.Search.liveUpdate(true); }, 250);
+                        <?php else: ?>
+                            TBG.Search.updateSavedSearchCounts();
                         <?php endif; ?>
+
+                        var hash = window.location.hash;
+
+                        if (hash != undefined && hash.indexOf('edit_modal') == 1) {
+                            $('saved_search_details').toggle('block');
+                        }
                     });
                 });
             </script>

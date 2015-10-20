@@ -180,7 +180,7 @@
                         </div>
                         <div id="clientconfig_list">
                             <?php foreach ($clients as $client): ?>
-                                <?php include_component('configuration/clientbox', array('client' => $client)); ?>
+                                <div id="client_<?php echo $client->getID(); ?>_item"><?php include_component('configuration/clientbox', array('client' => $client)); ?></div>
                             <?php endforeach; ?>
                         </div>
                     </div>
@@ -190,13 +190,15 @@
     </tr>
 </table>
     <script type="text/javascript">
-        Event.observe(window, 'load', function() {
-            $('findusers').on('click', function(event, element) {
-                event.preventDefault();
-                event.stopPropagation();
+        require(['domReady', 'thebuggenie/tbg', 'jquery'], function (domReady, tbgjs, jQuery) {
+            domReady(function () {
+                jQuery("body").on("click", "#findusers", function(event) {
+                    event.preventDefault();
+                    event.stopPropagation();
+                });
+                <?php if ($finduser): ?>
+                    tbgjs.Config.User.show('<?php echo make_url('configure_users_find_user'); ?>', '<?php echo $finduser; ?>');
+                <?php endif; ?>
             });
-            <?php if ($finduser): ?>
-                TBG.Config.User.show('<?php echo make_url('configure_users_find_user'); ?>', '<?php echo $finduser; ?>');
-            <?php endif; ?>
         });
     </script>

@@ -36,7 +36,7 @@
         const MODULE_NAME = 'notifications.module_name';
         const NOTIFICATION_TYPE = 'notifications.notification_type';
         const TARGET_ID = 'notifications.target_id';
-        const TRIGGERED_BY_UID = 'notifications.uid';
+        const TRIGGERED_BY_UID = 'notifications.triggered_by_user_id';
         const USER_ID = 'notifications.user_id';
         const IS_READ = 'notifications.is_read';
 
@@ -46,17 +46,29 @@
             $crit->addWhere(self::USER_ID, $user_id);
             $crit->addWhere(self::IS_READ, false);
             $crit->addWhere(self::SCOPE, framework\Context::getScope()->getID());
+            $crit->addWhere(self::TRIGGERED_BY_UID, $user_id, Criteria::DB_NOT_EQUALS);
             $unread_count = $this->count($crit);
 
             $crit = $this->getCriteria();
             $crit->addWhere(self::USER_ID, $user_id);
             $crit->addWhere(self::IS_READ, true);
             $crit->addWhere(self::SCOPE, framework\Context::getScope()->getID());
+            $crit->addWhere(self::TRIGGERED_BY_UID, $user_id, Criteria::DB_NOT_EQUALS);
             $read_count = $this->count($crit);
             
             return array($unread_count, $read_count);
         }
         
+        public function getByUserID($user_id)
+        {
+            $crit = $this->getCriteria();
+            $crit->addWhere(self::USER_ID, $user_id);
+            $crit->addWhere(self::SCOPE, framework\Context::getScope()->getID());
+            $crit->addWhere(self::TRIGGERED_BY_UID, $user_id, Criteria::DB_NOT_EQUALS);
+
+            return $this->select($crit);
+        }
+
         public function markUserNotificationsReadByTypesAndId($types, $id, $user_id)
         {
             if (!is_array($types)) $types = array($types);

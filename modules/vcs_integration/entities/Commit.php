@@ -2,6 +2,7 @@
 
     namespace thebuggenie\modules\vcs_integration\entities;
 
+    use thebuggenie\core\entities\Issue;
     use thebuggenie\core\helpers\TextParser,
         \thebuggenie\core\entities\Notification,
         \thebuggenie\core\entities\Project,
@@ -76,6 +77,12 @@
         protected $_data = null;
 
         /**
+         * Misc data array
+         * @var array
+         */
+        protected $_data_array = null;
+
+        /**
          * Affected files
          * @var array
          */
@@ -121,6 +128,38 @@
             {
                 $this->_addNotifications();
             }
+        }
+
+        protected function _parseMiscDataToArray() {
+            if (is_null($this->_data)) return array();
+
+            $array = array();
+            $misc_data = explode('|', $this->_data);
+
+            foreach ($misc_data as $data)
+            {
+                $key_value = explode(':', $data);
+
+                if (count($key_value) == 2)
+                {
+                    $array[$key_value[0]] = $key_value[1];
+                }
+            }
+
+            return $array;
+        }
+
+        protected function _parseMiscDataFromArray() {
+            if (is_null($this->_data_array) || ! count($this->_data_array)) return null;
+
+            $string = '';
+
+            foreach ($this->_data_array as $key => $value)
+            {
+                $string .= "{$key}:{$value}|";
+            }
+
+            return rtrim($string, '|');
         }
 
         /**
@@ -201,6 +240,21 @@
         public function getMiscData()
         {
             return $this->_data;
+        }
+
+        /**
+         * Get any other data for this comment, is parsed to array
+         *
+         * @return array
+         */
+        public function getMiscDataArray()
+        {
+            if (is_null($this->_data_array))
+            {
+                $this->_data_array = $this->_parseMiscDataToArray();
+            }
+
+            return $this->_data_array;
         }
 
         /**
@@ -296,6 +350,17 @@
         }
 
         /**
+         * Set misc data array for this commit (see other docs)
+         *
+         * @param array $data
+         */
+        public function setMiscDataArray(array $data)
+        {
+            $this->_data_array = $data;
+            $this->_data = $this->_parseMiscDataFromArray();
+        }
+
+        /**
          * Set the project this commit applies to
          *
          * @param \thebuggenie\core\entities\Project $project
@@ -307,7 +372,7 @@
 
         private function _populateAffectedFiles()
         {
-            if ($this->_files == null)
+            if ($this->_files === null)
             {
                 $this->_files = tables\Files::getTable()->getByCommitID($this->_id);
             }
@@ -315,9 +380,16 @@
 
         private function _populateAffectedIssues()
         {
-            if ($this->_issues == null)
+            if ($this->_issues === null)
             {
-                $this->_issues = tables\IssueLinks::getTable()->getByCommitID($this->_id);
+                $issuelinks = tables\IssueLinks::getTable()->getByCommitID($this->_id);
+                $issues = array();
+                foreach ($issuelinks as $issuelink) {
+                    if ($issuelink->getIssue() instanceof Issue) {
+                        $issues[$issuelink->getIssue()->getId()] = $issuelink->getIssue();
+                    }
+                }
+                $this->_issues = $issues;
             }
         }
 
@@ -330,9 +402,9 @@
          *
          * @return mixed
          */
-        public static function getByProject($id, $limit = 40, $offset = null)
+        public static function getByProject($id, $limit = 40, $offset = null, $branch = null, $gitlab_repos_nss = null)
         {
-            $commits = tables\Commits::getTable()->getCommitsByProject($id, $limit, $offset);
+            $commits = tables\Commits::getTable()->getCommitsByProject($id, $limit, $offset, $branch, $gitlab_repos_nss);
             return $commits;
         }
 

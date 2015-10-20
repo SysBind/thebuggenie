@@ -3,6 +3,8 @@
     namespace thebuggenie\core\entities;
 
     use thebuggenie\core\entities\common\IdentifiableEventContainer;
+    use thebuggenie\core\entities\tables\Notifications;
+    use thebuggenie\core\entities\tables\UserIssues;
     use thebuggenie\core\framework;
 
     /**
@@ -364,6 +366,8 @@
 
         protected $_read_notifications_count = null;
 
+        protected $_filter_first_notification = null;
+
         /**
          * Retrieve a user by username
          *
@@ -413,7 +417,9 @@
             {
                 $user = new self();
                 $user->setPassword(self::createPassword());
-                $user->setUsername(self::createPassword() . self::createPassword());
+                $username = end((explode('/', rtrim($identity, '/'))));
+                $username = urldecode($username);
+                $user->setUsername($username);
                 $user->setOpenIdLocked();
                 $user->setActivated();
                 $user->setEnabled();
@@ -562,8 +568,6 @@
                                     if ($user instanceof User && !$user->hasPasswordHash($password)) $user = null;
                                 }
 
-                                $raw = false;
-
                                 if (!$user instanceof User)
                                 {
                                     framework\Context::logout();
@@ -626,6 +630,12 @@
                                     framework\Context::logout();
                                     throw new \Exception('No such login');
                                     //framework\Context::getResponse()->headerRedirect(framework\Context::getRouting()->generate('login'));
+                                }
+                                // In case the operation was a success, but no autologin was enabled, set the user to null
+                                // so the rest of the code that deals with guest access can handle it.
+                                else if ($user == true)
+                                {
+                                    $user = null;
                                 }
                             }
                             catch (\Exception $e)
@@ -910,7 +920,15 @@
             {
                 return framework\Context::getI18n()->__('No such user');
             }
-            return ($this->_buddyname) ? $this->_buddyname : (($this->_realname) ? $this->_realname : $this->_username);
+            switch (framework\Settings::getUserDisplaynameFormat())
+            {
+                case framework\Settings::USER_DISPLAYNAME_FORMAT_REALNAME:
+                    return ($this->_realname) ? $this->_realname : $this->_username;
+
+                case framework\Settings::USER_DISPLAYNAME_FORMAT_BUDDY:
+                default:
+                    return ($this->_buddyname) ? $this->_buddyname : (($this->_realname) ? $this->_realname : $this->_username);
+            }
         }
 
         /**
@@ -938,7 +956,15 @@
             {
                 return $this->_buddyname;
             }
-            return ($this->_buddyname) ? $this->_buddyname . ' (' . $this->_username . ')' : $this->_username;
+            switch (framework\Settings::getUserDisplaynameFormat())
+            {
+                case framework\Settings::USER_DISPLAYNAME_FORMAT_REALNAME:
+                    return ($this->_realname) ? $this->_realname . ' (' . $this->_username . ')' : $this->_username;
+
+                case framework\Settings::USER_DISPLAYNAME_FORMAT_BUDDY:
+                default:
+                    return ($this->_buddyname) ? $this->_buddyname . ' (' . $this->_username . ')' : (($this->_realname) ? $this->_realname . ' (' . $this->_username . ')' : $this->_username);
+            }
         }
 
         public function __toString()
@@ -1148,24 +1174,9 @@
         {
             if ($this->_starredissues === null)
             {
-                $this->_b2dbLazyload('_starredissues');
-                foreach ($this->_starredissues as $k => $issue)
-                {
-                    if (!$issue->getScope() instanceof Scope || $issue->getScope()->getID() != framework\Context::getScope()->getID()) unset($this->_starredissues[$k]);
-                }
+                $this->_starredissues = UserIssues::getTable()->getUserStarredIssues($this->getID());
                 ksort($this->_starredissues, SORT_NUMERIC);
             }
-        }
-
-        /**
-         * Returns an array of issues ids which are "starred" by this user
-         *
-         * @return array
-         */
-        public function getStarredIssues()
-        {
-            $this->_populateStarredIssues();
-            return $this->_starredissues;
         }
 
         /**
@@ -1838,7 +1849,7 @@
                 {
                     $url = (framework\Context::getScope()->isSecure()) ? 'https://secure.gravatar.com/avatar/' : 'http://www.gravatar.com/avatar/';
                     $url .= md5(trim($this->getEmail())) . '.png?d=wavatar&amp;s=';
-                    $url .= ($small) ? 22 : 48;
+                    $url .= ($small) ? 28 : 48;
                 }
                 else
                 {
@@ -2040,7 +2051,8 @@
         {
             framework\Logging::log('Checking permission '.$permission_type);
             $group_id = (int) $this->getGroupID();
-            $retval = framework\Context::checkPermission($permission_type, $this->getID(), $group_id, $this->getTeams(), $target_id, $module_name);
+            $has_associated_project = is_numeric($target_id) && $target_id != 0 ? array_key_exists($target_id, $this->getAssociatedProjects()) : true;
+            $retval = framework\Context::checkPermission($permission_type, $this->getID(), $group_id, $this->getTeams(), $target_id, $module_name, $has_associated_project);
             if ($retval !== null)
             {
                 framework\Logging::log('...done (Checking permissions '.$permission_type.', target id '.$target_id.') - return was '.(($retval) ? 'true' : 'false'));
@@ -2297,8 +2309,14 @@
         {
             $retval = $this->hasPermission('canviewconfig', $section);
             $retval = ($retval !== null) ? $retval : $this->hasPermission('cansaveconfig', $section);
-            $retval = ($retval !== null) ? $retval : $this->hasPermission('canviewconfig', 0);
-            $retval = ($retval !== null) ? $retval : $this->hasPermission('cansaveconfig', 0);
+
+            foreach (range(0, 19) as $target_id)
+            {
+                if ($retval !== null) break;
+
+                $retval = ($retval !== null) ? $retval : $this->hasPermission('canviewconfig', $target_id);
+                $retval = ($retval !== null) ? $retval : $this->hasPermission('cansaveconfig', $target_id);
+            }
 
             return (bool) ($retval !== null) ? $retval : false;
         }
@@ -2344,6 +2362,14 @@
             if ($project->getOwner() instanceof User && $project->getOwner()->getID() == $this->getID()) return true;
 
             return $this->_dualPermissionsCheck('canmanageprojectreleases', $project->getID(), 'canmanageproject', $project->getID(), false);
+        }
+
+        public function canAddScrumSprints(\thebuggenie\core\entities\Project $project)
+        {
+            if ($project->isArchived()) return false;
+            if ($project->getOwner() instanceof User && $project->getOwner()->getID() == $this->getID()) return true;
+
+            return $this->_dualPermissionsCheck('canaddscrumsprints', $project->getID(), 'candoscrumplanning', $project->getID(), false);
         }
 
         /**
@@ -2434,7 +2460,7 @@
 
                 foreach ($this->getTeams() as $team)
                 {
-                    $project_ids += array_keys($team->getAssociatedProjects());
+                    $project_ids = array_merge($project_ids, array_keys($team->getAssociatedProjects()));
                 }
 
                 $project_ids = array_unique($project_ids);
@@ -2639,24 +2665,41 @@
             return array_key_exists($scope->getID(), $this->getScopes());
         }
 
-        protected function _populateNotifications()
+        protected function _populateNotifications($first_notification_id = null, $last_notification_id = null)
         {
+            $filter_first_notification = ! is_null($first_notification_id) && is_numeric($first_notification_id);
+            if ($filter_first_notification)
+            {
+                $this->_notifications = null;
+                $this->_filter_first_notification = true;
+            }
+            else if (! $filter_first_notification && $this->_filter_first_notification)
+            {
+                $this->_notifications = null;
+                $this->_filter_first_notification = false;
+            }
             if (!is_array($this->_notifications))
             {
-                $this->_b2dbLazyload('_notifications');
+                $this->_notifications = Notifications::getTable()->getByUserID($this->getID());
                 $notifications = array('unread' => array(), 'read' => array(), 'all' => array());
-                foreach ($this->_notifications as $notification)
+                $db_notifcations = array_reverse($this->_notifications);
+                foreach ($db_notifcations as $notification)
                 {
-                    array_unshift($notifications['all'], $notification);
+                    if ($filter_first_notification && $notification->getID() <= $first_notification_id) break;
+                    if (! $filter_first_notification && ! is_null($last_notification_id) && $notification->getID() >= $last_notification_id) continue;
+                    if ($notification->getTriggeredByUser()->getID() == $this->getID()) continue;
+
+                    array_push($notifications['all'], $notification);
                     if ($notification->isRead())
                     {
-                        array_unshift($notifications['read'], $notification);
+                        array_push($notifications['read'], $notification);
                     }
                     else
                     {
-                        array_unshift($notifications['unread'], $notification);
+                        array_push($notifications['unread'], $notification);
                     }
                 }
+                $notifications = array_reverse($notifications);
                 $this->_notifications = $notifications;
                 $this->_unread_notifications_count = count($notifications['unread']);
                 $this->_read_notifications_count = count($notifications['read']);
@@ -2668,9 +2711,9 @@
          *
          * @return array|\thebuggenie\core\entities\Notification
          */
-        public function getNotifications()
+        public function getNotifications($first_notification_id = null, $last_notification_id = null)
         {
-            $this->_populateNotifications();
+            $this->_populateNotifications($first_notification_id, $last_notification_id);
             return $this->_notifications['all'];
         }
 

@@ -3,6 +3,7 @@
     namespace thebuggenie\core\helpers;
 
     use thebuggenie\core\framework,
+        thebuggenie\modules\publish\entities\tables\Articles,
         thebuggenie\modules\publish\entities\Article;
 
     /**
@@ -113,7 +114,7 @@
                 // (#)ISSUE_NUMBER (TRANSITIONS)" (parenthesis means optional). For
                 // example:
                 // "Resolves issue #2 (Resolve issue)"
-                $regex[] = '#( |^)(?<!\!)(('.$issue_string.')\s\#?(?P<issues>([A-Z0-9]+\-)?\d+))( \((?P<transitions>.*?)\))?#i';
+                $regex[] = '#( |\(|^)(?<!\!)(('.$issue_string.')\s\#?(?P<issues>([A-Z0-9]+\-)?\d+))( \((?P<transitions>.*?)\))?#i';
                 // This regex will match messages that contain template at the beginning
                 // of message in format "ISSUE_NUMBER: (TRANSITIONS)".
                 $regex[] = '#^(?<!\!)((?P<issues>([A-Z0-9]+\-)?\d+)):( \((?P<transitions>.*?)\))?#i';
@@ -128,7 +129,7 @@
 
         public static function getMentionsRegex()
         {
-            return '/\B\@([\w\-]+)/i';
+            return '/\B\@([\w\-.]+)/i';
         }
 
         /**
@@ -329,17 +330,17 @@
 
         protected function _wiki_link($topic)
         {
-            return ucfirst(str_replace(' ', '_', $topic));
+            return $topic;
         }
 
         protected function _parse_image($href,$title,$options)
         {
-            if ($this->ignore_images) return "";
-            if (!$this->image_uri) return $title;
+            // if ($this->ignore_images) return "";
+            // if (!$this->image_uri) return $title;
 
-            $href = $this->image_uri . $href;
+            // $href = $this->image_uri . $href;
 
-            $imagetag = sprintf('<img src="%s" alt="s" />', $href, $title);
+            $imagetag = sprintf('<img src="%s" alt="%s" />', $href, $title);
             foreach ($options as $k=>$option)
             {
                 switch($option)
@@ -545,7 +546,15 @@
                     }
                     else
                     {
-                        $retval = link_tag($file_link, $caption . image_tag('icon_open_new.png', array('style' => 'margin-left: 5px;')), array('target' => 'new_window_'.rand(0, 10000), 'title' => __('Open file in new window')));
+                        if (strpos($file_link, 'http') === 0) {
+                            $retval = $this->_parse_image($file_link, $caption, $options);
+                        }
+                        else if ($file_link == $filename) {
+                            $retval = $caption . image_tag('icon_open_new.png', array('style' => 'margin-left: 5px;', 'title' => __('File no longer exists.')));
+                        }
+                        else {
+                            $retval = link_tag($file_link, $caption . image_tag('icon_open_new.png', array('style' => 'margin-left: 5px;')), array('target' => 'new_window_'.rand(0, 10000), 'title' => __('Open file in new window')));
+                        }
                     }
                 }
                 return $retval;
@@ -680,7 +689,7 @@
             return "";
         }
 
-        public static function parseIssuelink($matches)
+        public static function parseIssuelink($matches, $markdown_format = false)
         {
             $theIssue = \thebuggenie\core\entities\Issue::getIssueFromLink($matches[0]);
             $output = '';
@@ -691,11 +700,20 @@
             }
             if ($theIssue instanceof \thebuggenie\core\entities\Issue)
             {
-                $output = ' '.link_tag(make_url('viewissue', array('issue_no' => $theIssue->getFormattedIssueNo(false), 'project_key' => $theIssue->getProject()->getKey())), $matches[0], array('class' => $classname, 'title' => $theIssue->getFormattedTitle()));
+                $theIssueUrl = make_url('viewissue', array('issue_no' => $theIssue->getFormattedIssueNo(false), 'project_key' => $theIssue->getProject()->getKey()));
+
+                if ($markdown_format) {
+                    if ($classname != '') $classname = ' {.'.$classname.'}';
+
+                    $output = "[{$matches[0]}]($theIssueUrl \"{$theIssue->getFormattedTitle()}\")$classname";
+                }
+                else {
+                    $output = ' '.link_tag($theIssueUrl, $matches[0], array('class' => $classname, 'title' => $theIssue->getFormattedTitle()));
+                }
             }
             else
             {
-                $output = $matches[1];
+                $output = $matches[0];
             }
             return $output;
         }
@@ -705,7 +723,7 @@
             $user = \thebuggenie\core\entities\tables\Users::getTable()->getByUsername($matches[1]);
             if ($user instanceof \thebuggenie\core\entities\User)
             {
-                $output = framework\Action::returnComponentHTML('main/userdropdown', array('user' => $matches[1], 'displayname' => $matches[0]));
+                $output = framework\Action::returnComponentHTML('main/userdropdown_inline', array('user' => $matches[1], 'in_email' => isset($this->options['in_email']) ? $this->options['in_email'] : false));
                 $this->mentions[$user->getID()] = $user;
             }
             else
@@ -789,7 +807,7 @@
                     $template_name = array_shift($details);
                     if (substr($template_name, 0, 1) == ':') $template_name = substr($template_name, 1);
                     $template_name = (Article::doesArticleExist($template_name)) ? $template_name : 'Template:'.$template_name;
-                    $template_article = tables\Articles::getTable()->getArticleByName($template_name);
+                    $template_article = Articles::getTable()->getArticleByName($template_name);
                     $parameters = array();
                     if (count($details))
                     {
@@ -969,28 +987,28 @@
             {
                 case ":(":
                 case ":-(":
-                    return image_tag('smileys/4.png');
+                    return image_tag('smileys/4.png', array('class' => 'smiley'));
                 case ":)":
                 case ":-)":
-                    return image_tag('smileys/2.png');
+                    return image_tag('smileys/2.png', array('class' => 'smiley'));
                 case "8)":
                 case "8-)":
-                    return image_tag('smileys/3.png');
+                    return image_tag('smileys/3.png', array('class' => 'smiley'));
                 case "B)":
                 case "B-)":
-                    return image_tag('smileys/3.png');
+                    return image_tag('smileys/3.png', array('class' => 'smiley'));
                 case ":-/":
-                    return image_tag('smileys/10.png');
+                    return image_tag('smileys/10.png', array('class' => 'smiley'));
                 case ":D":
                 case ":-D":
-                    return image_tag('smileys/5.png');
+                    return image_tag('smileys/5.png', array('class' => 'smiley'));
                 case ":P":
                 case ":-P":
-                    return image_tag('smileys/6.png');
+                    return image_tag('smileys/6.png', array('class' => 'smiley'));
                 case "(!)":
-                    return image_tag('smileys/8.png');
+                    return image_tag('smileys/8.png', array('class' => 'smiley'));
                 case "(?)":
-                    return image_tag('smileys/9.png');
+                    return image_tag('smileys/9.png', array('class' => 'smiley'));
             }
         }
 
@@ -1006,7 +1024,7 @@
             $line_regexes['tableopener'] = '^\{\|(.*?)$';
             $line_regexes['tablecloser'] = '^\|\}$';
             $line_regexes['tablerow'] = '^\|-(.*?)$';
-            $line_regexes['tableheader'] = '^\!(.*?)$';
+            $line_regexes['tableheader'] = '^\!\ (.*?)$';
             $line_regexes['tablerowcontent'] = '^\|{1,2}\s?(.*?)$';
             $line_regexes['headers'] = '^(={1,6})(.*?)(={1,6})$';
             $line_regexes['horizontalrule'] = '^----$';
@@ -1016,11 +1034,16 @@
             $char_regexes[] = array('/(__NOTOC__|__NOEDITSECTION__)/i', array($this, '_parse_eliminate'));
             $char_regexes[] = array('/(\[\[(\:?([^\]]*?)\:)?([^\]]*?)(\|([^\]]*?))?\]\]([a-z]+)?)/i', array($this, "_parse_save_ilink"));
             $char_regexes[] = array('/(^|[ \t\r\n])((ftp|http|https|gopher|mailto|news|nntp|telnet|wais|file|prospero|aim|webcal):(([A-Za-z0-9$_.+!*(),;\[\]\/?:@&~=-])|%[A-Fa-f0-9]{2}){2,}(#([a-zA-Z0-9][a-zA-Z0-9\[\]$_.+!*(),;\/?:@&~=-]*))?([A-Za-z0-9\[\]$_+!*();\/?:~-]))/', array($this, '_parse_autosensedlink'));
-            $char_regexes[] = array('/(\[([^\]]*?)(\s+[^\]]*?)?\])/i', array($this, "_parse_save_elink"));
+            $char_regexes[] = array('/(\[([^\]]*?)(?:\s+([^\]]*?))?\])/i', array($this, "_parse_save_elink"));
             $char_regexes[] = array(self::getIssueRegex(), array($this, '_parse_issuelink'));
-            $char_regexes[] = array('/\B\@([\w\-]+)/i', array($this, '_parse_mention'));
-            $char_regexes[] = array('/(?<=\s|^)(\:\(|\:-\(|\:\)|\:-\)|8\)|8-\)|B\)|B-\)|\:-\/|\:-D|\:-P|\(\!\)|\(\?\))(?=\s|$)/i', array($this, '_getsmiley'));
-            $char_regexes[] = array('/\&amp\;(.*)\;/i', array($this, '_parse_specialchar'));
+            $char_regexes[] = array('/\B\@([\w\-.]+)/i', array($this, '_parse_mention'));
+            $char_regexes[] = array('/(?<=\s|^)(\:\(|\:-\(|\:\)|\:-\)|8\)|8-\)|B\)|B-\)|\:-\/|\:-D|\:-P|\(\!\)|\(\?\))(?=\s|$)/', array($this, '_getsmiley'));
+            $char_regexes[] = array('/&amp;([A-Za-z0-9]+|\#[0-9]+|\#[xX][0-9A-Fa-f]+);/', array($this, '_parse_specialchar'));
+
+            $event = framework\Event::createNew('core', 'thebuggenie\core\framework\helpers\TextParser::_parse_line::char_regexes', $this, array(), $char_regexes);
+            $event->trigger();
+
+            $char_regexes = $event->getReturnList();
 
             $this->stop = false;
             $this->stop_all = false;
@@ -1109,7 +1132,7 @@
 
                 $text = tbg_decodeUTF8($text, true);
 
-                $text = preg_replace_callback('/&lt;(strike|u|pre|tt|s|del|ins|u|blockquote|div|span|font)(\s.*)?&gt;(.*)&lt;\/(\\1)&gt;/ismU', array($this, '_parse_allowed_tags') ,$text);
+                $text = preg_replace_callback('/&lt;(strike|u|pre|tt|s|del|ins|u|blockquote|div|span|font|sub|sup)(\s.*)?&gt;(.*)&lt;\/(\\1)&gt;/ismU', array($this, '_parse_allowed_tags') ,$text);
                 $text = str_replace('&lt;br&gt;', '<br>' ,$text);
 
                 $lines = explode("\n", $text);

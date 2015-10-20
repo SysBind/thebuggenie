@@ -12,6 +12,26 @@
         </td>
     </tr>
     <tr>
+        <td>
+            <label><?php echo __('Custom header and favicons'); ?></label>
+        </td>
+        <td>
+            <div class="button button-blue" onclick="TBG.Main.Helpers.Backdrop.show('<?php echo make_url('get_partial_for_backdrop', array('key' => 'site_icons')); ?>');"><span><?php echo __('Configure icons'); ?></span></div>
+        </td>
+    </tr>
+    <tr>
+        <td><label for="header_link"><?php echo __('Custom header link'); ?></label></td>
+        <td>
+            <input type="text" name="<?php echo \thebuggenie\core\framework\Settings::SETTING_HEADER_LINK; ?>"
+                   id="header_link" value="<?php echo \thebuggenie\core\framework\Settings::getHeaderLink(); ?>"
+                   style="width: 90%;"<?php if ($access_level != \thebuggenie\core\framework\Settings::ACCESS_FULL): ?> disabled<?php endif; ?>
+                >
+            <?php echo config_explanation(
+                __('You can alter the webpage that clicking on the header icon navigates to. If left blank it will link to the main page of this installation.')
+            ); ?>
+        </td>
+    </tr>
+    <tr>
         <td><label for="tbg_header_name_html"><?php echo __('Allow HTML in site title'); ?></label></td>
         <td>
             <select name="<?php echo \thebuggenie\core\framework\Settings::SETTING_TBG_NAME_HTML; ?>" id="tbg_header_name_html" <?php if ($access_level != \thebuggenie\core\framework\Settings::ACCESS_FULL): ?> disabled<?php endif; ?>>
@@ -113,6 +133,15 @@
             <input type="text" name="<?php echo \thebuggenie\core\framework\Settings::SETTING_SYNTAX_HIGHLIGHT_DEFAULT_INTERVAL; ?>" style="width: 50px;"<?php if ($access_level != \thebuggenie\core\framework\Settings::ACCESS_FULL): ?> disabled<?php endif; ?> id="highlight_default_interval" value="<?php echo (\thebuggenie\core\framework\Settings::get('highlight_default_interval')); ?>" />
             <?php echo config_explanation(
                 __('When using fancy numbering, you can have a line highlighted at a regular interval. Set the default interval to use here, if not otherwise specified')
+            ); ?>
+        </td>
+    </tr>
+    <tr>
+        <td><label for="notification_poll_interval"><?php echo __('Notification poll interval'); ?></label></td>
+        <td>
+            <input type="text" name="<?php echo \thebuggenie\core\framework\Settings::SETTING_NOTIFICATION_POLL_INTERVAL; ?>" style="width: 50px;"<?php if ($access_level != \thebuggenie\core\framework\Settings::ACCESS_FULL): ?> disabled<?php endif; ?> id="notification_poll_interval" value="<?php echo (\thebuggenie\core\framework\Settings::getNotificationPollInterval()); ?>" />
+            <?php echo config_explanation(
+                __('Polling is used to check for new user notifications. Set the default polling interval in seconds, or 0 to disable polling.')
             ); ?>
         </td>
     </tr>

@@ -356,10 +356,9 @@
          */
         public function getVersion()
         {
-            $versions = array();
-            if ($this->_version_major) $versions[] = $this->_version_major;
-            if ($this->_version_major || $this->_version_minor) $versions[] = $this->_version_minor;
-            if ($this->_version_minor && $this->_version_revision) $versions[] = $this->_version_revision;
+            $versions = array($this->_version_major, $this->_version_minor);
+
+            if ($this->_version_revision != 0) $versions[] = $this->_version_revision;
 
             return join('.', $versions);
         }
@@ -373,13 +372,9 @@
          */
         public function setVersion($ver_mj, $ver_mn, $ver_rev)
         {
-            $ver_mj = ((int) $ver_mj > 0) ? (int) $ver_mj : 0;
-            $ver_mn = ((int) $ver_mn > 0) ? (int) $ver_mn : 0;
-            $ver_rev = ((int) $ver_rev > 0) ? (int) $ver_rev : 0;
-
-            $this->_version_major = $ver_mj;
-            $this->_version_minor = $ver_mn;
-            $this->_version_revision = $ver_rev;
+            $this->_version_major = ($ver_mj) ? $ver_mj : 0;
+            $this->_version_minor = ($ver_mn) ? $ver_mn : 0;
+            $this->_version_revision = ($ver_rev) ? $ver_rev : 0;
         }
 
         /**
@@ -389,8 +384,7 @@
          */
         public function setVersionMajor($ver_mj)
         {
-            $ver_mj = ((int) $ver_mj > 0) ? (int) $ver_mj : 0;
-            $this->_version_major = $ver_mj;
+            $this->_version_major = ($ver_mj) ? $ver_mj : 0;
         }
 
         /**
@@ -400,8 +394,7 @@
          */
         public function setVersionMinor($ver_mn)
         {
-            $ver_mn = ((int) $ver_mn > 0) ? (int) $ver_mn : 0;
-            $this->_version_minor = $ver_mn;
+            $this->_version_minor = ($ver_mn) ? $ver_mn : 0;
         }
 
         /**
@@ -411,8 +404,7 @@
          */
         public function setVersionRevision($ver_rev)
         {
-            $ver_rev = ((int) $ver_rev > 0) ? (int) $ver_rev : 0;
-            $this->_version_revision = $ver_rev;
+            $this->_version_revision = ($ver_rev) ? $ver_rev : 0;
         }
 
         /**

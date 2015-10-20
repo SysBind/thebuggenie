@@ -4,8 +4,8 @@
      * Configuration for theme
      */
 
-    $tbg_response->addStylesheet('oxygen/oxygen.css');
-
+    $tbg_response->addStylesheet(make_url('asset_css', array('theme_name' => 'oxygen', 'css' => 'theme.css')));
+    \thebuggenie\core\framework\Settings::setIconsetName('oxygen');
 ?>
 <style>
     #tbg3_username, #fieldusername { background-image: url('<?php echo $webroot . 'iconsets/' . \thebuggenie\core\framework\Settings::getIconsetName() . '/'; ?>user_mono.png'); }
@@ -20,6 +20,9 @@
 
     table.results_normal th.sort_asc { background-image: url('<?php echo $webroot; ?>iconsets/oxygen/sort_down.png') !important; padding-left: 25px !important; }
     table.results_normal th.sort_desc { background-image: url('<?php echo $webroot; ?>iconsets/oxygen/sort_up.png') !important; padding-left: 25px !important; }
+
+    .module .rating { background-image:url('<?php echo $webroot; ?>iconsets/oxygen/star_faded_small.png'); }
+    .module .rating .score { background-image:url('<?php echo $webroot; ?>iconsets/oxygen/star_small.png'); }
 
     .markItUp .markItUpButton1 a { background-image:url('<?php echo $webroot; ?>iconsets/oxygen/markitup/h1.png'); }
     .markItUp .markItUpButton2 a { background-image:url('<?php echo $webroot; ?>iconsets/oxygen/markitup/h2.png'); }
@@ -40,5 +43,7 @@
     .markItUpResizeHandle { background-image:url('<?php echo $webroot; ?>iconsets/oxygen/markitup/handle.png'); }
     .markItUpHeader ul .markItUpDropMenu { background-image: url('<?php echo $webroot; ?>iconsets/oxygen/markitup/menu.png'); }
     .markItUpHeader ul ul .markItUpDropMenu { background-image: url('<?php echo $webroot; ?>iconsets/oxygen/markitup/submenu.png'); }
+
+    #user_notifications .toggling { background: url('<?php echo $webroot; ?>iconsets/oxygen/spinning_16.gif') no-repeat 374px 11px; }
 
 </style>

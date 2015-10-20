@@ -43,6 +43,11 @@
             framework\Logging::log('done (user dropdown component)');
         }
 
+        public function componentUserdropdown_Inline()
+        {
+            $this->componentUserdropdown();
+        }
+
         public function componentClientusers()
         {
             try
@@ -189,7 +194,7 @@
                 $fields_list['severity'] = array('title' => $i18n->__('Severity'), 'choices' => array(), 'visible' => $this->issue->isSeverityVisible(), 'changed' => $this->issue->isSeverityChanged(), 'merged' => $this->issue->isSeverityMerged(), 'name' => (($this->issue->getSeverity() instanceof entities\Severity) ? $this->issue->getSeverity()->getName() : ''), 'name_visible' => (bool) ($this->issue->getSeverity() instanceof entities\Severity), 'noname_visible' => (bool) (!$this->issue->getSeverity() instanceof entities\Severity), 'icon' => false, 'change_tip' => $i18n->__('Click to change severity'), 'change_header' => $i18n->__('Change severity'), 'clear' => $i18n->__('Clear the severity'), 'select' => $i18n->__('%clear_the_severity or click to select a new severity', array('%clear_the_severity' => '')));
                 if ($this->issue->isUpdateable() && $this->issue->canEditSeverity())
                     $fields_list['severity']['choices'] = entities\Severity::getAll();
-                $fields_list['milestone'] = array('title' => $i18n->__('Targetted for'), 'choices' => array(), 'visible' => $this->issue->isMilestoneVisible(), 'changed' => $this->issue->isMilestoneChanged(), 'merged' => $this->issue->isMilestoneMerged(), 'name' => (($this->issue->getMilestone() instanceof entities\Milestone) ? $this->issue->getMilestone()->getName() : ''), 'name_visible' => (bool) ($this->issue->getMilestone() instanceof entities\Milestone), 'noname_visible' => (bool) (!$this->issue->getMilestone() instanceof entities\Milestone), 'icon' => true, 'icon_name' => 'icon_milestones.png', 'change_tip' => $i18n->__('Click to change which milestone this issue is targetted for'), 'change_header' => $i18n->__('Set issue target / milestone'), 'clear' => $i18n->__('Set as not targetted'), 'select' => $i18n->__('%set_as_not_targetted or click to set a new target milestone', array('%set_as_not_targetted' => '')), 'url' => true, 'current_url' => (($this->issue->getMilestone() instanceof entities\Milestone) ? $this->getRouting()->generate('project_milestone_details', array('project_key' => $this->issue->getProject()->getKey(), 'milestone_id' => $this->issue->getMilestone()->getID())) : ''));
+                $fields_list['milestone'] = array('title' => $i18n->__('Targetted for'), 'choices' => array(), 'visible' => $this->issue->isMilestoneVisible(), 'changed' => $this->issue->isMilestoneChanged(), 'merged' => $this->issue->isMilestoneMerged(), 'name' => (($this->issue->getMilestone() instanceof entities\Milestone) ? $this->issue->getMilestone()->getName() : ''), 'name_visible' => (bool) ($this->issue->getMilestone() instanceof entities\Milestone), 'noname_visible' => (bool) (!$this->issue->getMilestone() instanceof entities\Milestone), 'icon' => true, 'icon_name' => 'icon_milestones.png', 'change_tip' => $i18n->__('Click to change which milestone this issue is targetted for'), 'change_header' => $i18n->__('Set issue target / milestone'), 'clear' => $i18n->__('Set as not targetted'), 'select' => $i18n->__('%set_as_not_targetted or click to set a new target milestone', array('%set_as_not_targetted' => '')), 'url' => true, 'current_url' => (($this->issue->getMilestone() instanceof entities\Milestone) ? $this->getRouting()->generate('project_roadmap', array('project_key' => $this->issue->getProject()->getKey())).'#roadmap_milestone_'.$this->issue->getMilestone()->getID() : ''));
                 if ($this->issue->isUpdateable() && $this->issue->canEditMilestone())
                     $fields_list['milestone']['choices'] = $this->project->getMilestonesForIssues();
 
@@ -387,9 +392,16 @@
 
         public function componentNotifications()
         {
-            $offset = $this->offset ?: 0;
-            $notifications = $this->getUser()->getNotifications();
-            $this->notifications = ($offset < count($notifications)) ? array_slice($notifications, $offset, 25) : array();
+            $this->filter_first_notification = ! is_null($this->first_notification_id) && is_numeric($this->first_notification_id);
+            $notifications = $this->getUser()->getNotifications($this->first_notification_id, $this->last_notification_id);
+            if ($this->filter_first_notification)
+            {
+                $this->notifications = $notifications;
+            }
+            else
+            {
+                $this->notifications = count($notifications) ? array_slice($notifications, 0, 25) : array();
+            }
             $this->num_unread = $this->getUser()->getNumberOfUnreadNotifications();
             $this->num_read = $this->getUser()->getNumberOfReadNotifications();
         }
@@ -524,7 +536,9 @@
 
         public function componentCaptcha()
         {
-
+            if (!isset($_SESSION['activation_number'])) {
+                $_SESSION['activation_number'] = tbg_printRandomNumber();
+            }
         }
 
         public function componentIssueadditem()
@@ -663,12 +677,36 @@
 
         public function componentDashboardViewLoggedActions()
         {
-            $this->actions = $this->getUser()->getLatestActions();
+            list($actions, $limit_to_target) = tables\Log::getTable()->getByUserID($this->getUser()->getID(), 10, null, true);
+
+            if (count($limit_to_target) != 10)
+            {
+                $i = 0;
+                while (true)
+                {
+                    list($more_actions, $limit_to_target) = tables\Log::getTable()->getByUserID($this->getUser()->getID(), 10, 10 * $i + 10, $limit_to_target);
+                    $i++;
+
+                    $actions = array_merge($actions, $more_actions);
+
+                    if (count($limit_to_target) >= 10) break;
+                }
+            }
+
+            $this->actions = $actions;
         }
 
         public function componentDashboardViewUserProjects()
         {
-
+            $routing = $this->getRouting();
+            $i18n = $this->getI18n();
+            $links = array(
+                array('url' => $routing->generate('project_open_issues', array('project_key' => '%project_key%')), 'text' => $i18n->__('Issues')),
+                array('url' => $routing->generate('project_roadmap', array('project_key' => '%project_key%')), 'text' => $i18n->__('Roadmap')),
+            );
+            $event = \thebuggenie\core\framework\Event::createNew('core', 'main\Components::DashboardViewUserProjects::links', null, array(), $links);
+            $event->trigger();
+            $this->links = $event->getReturnList();
         }
 
         public function componentDashboardViewUserMilestones()

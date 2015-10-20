@@ -221,7 +221,6 @@
                     foreach ($issue->getParentIssues() as $parent)
                     {
                         if ($parent->getIssuetype()->getID() != $epic_issuetype_id) unset($issues[$id]);
-                        break 2;
                     }
                 }
                 elseif ($issue->getIssuetype()->getID() == $epic_issuetype_id)
@@ -244,10 +243,12 @@
                 {
                     while ($row = $res->getNextRow())
                     {
+                        $points = ($res->get('state') == Issue::STATE_CLOSED && $res->get('estimated_points') > $res->get('spent_points')) ? $res->get('estimated_points') : $res->get('spent_points');
+                        $hours = ($res->get('state') == Issue::STATE_CLOSED && $res->get('estimated_hours') > $res->get('spent_hours')) ? $res->get('estimated_hours') : $res->get('spent_hours');
                         $this->_points['estimated'] += $res->get('estimated_points');
-                        $this->_points['spent'] += $res->get('spent_points');
+                        $this->_points['spent'] += $points;
                         $this->_hours['estimated'] += $res->get('estimated_hours');
-                        $this->_hours['spent'] += round($res->get('spent_hours') / 100, 2);
+                        $this->_hours['spent'] += round($hours / 100, 2);
                     }
                 }
             }
@@ -373,6 +374,11 @@
         public function getDescription()
         {
             return $this->_description;
+        }
+
+        public function hasDescription()
+        {
+            return (bool) ($this->getDescription() != '');
         }
 
         /**
@@ -661,11 +667,12 @@
          */
         public function updateStatus()
         {
-            if (!$this->hasReachedDate() && $this->countClosedIssues() == $this->countIssues())
+            $all_issues_closed = (bool) ($this->countClosedIssues() == $this->countIssues());
+            if (!$this->hasReachedDate() && $all_issues_closed)
             {
                 $this->_reacheddate = NOW;
             }
-            elseif ($this->hasReachedDate())
+            elseif ($this->hasReachedDate() && !$all_issues_closed)
             {
                 $this->_reacheddate = null;
             }
@@ -761,6 +768,10 @@
                 $spent_times = tables\IssueSpentTimes::getTable()->getSpentTimesByDateAndIssueIDs($this->getStartingDate(), $this->getScheduledDate(), $issues);
 
                 $burndown = array();
+                foreach ($spent_times['hours'] as $key => $val)
+                {
+                    $spent_times['hours'][$key] = round($spent_times['hours'][$key] / 100, 2);
+                }
                 foreach ($estimations['hours'] as $key => $val)
                 {
                     $burndown['hours'][$key] = (array_key_exists($key, $spent_times['hours'])) ? $val - $spent_times['hours'][$key] : $val;
@@ -769,11 +780,6 @@
                 {
                     $burndown['points'][$key] = (array_key_exists($key, $spent_times['points'])) ? $val - $spent_times['points'][$key] : $val;
                 }
-                foreach ($spent_times['hours'] as $key => $val)
-                {
-                    $spent_times['hours'][$key] = round($spent_times['hours'][$key] / 100, 2);
-                }
-
 
                 $this->_burndowndata = array('estimations' => $estimations, 'spent_times' => $spent_times, 'burndown' => $burndown);
             }

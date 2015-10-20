@@ -198,6 +198,9 @@
                     else
                         $issue->setStatus($request['status_id']);
                     break;
+                case self::ACTION_CLEAR_MILESTONE:
+                    $issue->setMilestone(null);
+                    break;
                 case self::ACTION_SET_MILESTONE:
                     if ($this->getTargetValue())
                         $issue->setMilestone(Milestone::getB2DBTable()->selectById((int) $this->getTargetValue()));
@@ -342,13 +345,17 @@
                 default:
                     if (strpos($this->_action_type, self::CUSTOMFIELD_CLEAR_PREFIX) === 0)
                     {
-                        $customkey = substr($this->_action_type, strlen(self::CUSTOMFIELD_CLEAR_PREFIX) - 1);
+                        $customkey = substr($this->_action_type, strlen(self::CUSTOMFIELD_CLEAR_PREFIX));
                         $issue->setCustomField($customkey, null);
                     }
-                    elseif (strpos($this->_action_type, self::CUSTOMFIELD_CLEAR_PREFIX) === 0)
+                    elseif (strpos($this->_action_type, self::CUSTOMFIELD_SET_PREFIX) === 0)
                     {
-                        $customkey = substr($this->_action_type, strlen(self::CUSTOMFIELD_SET_PREFIX) - 1);
-                        $issue->setCustomField($customkey, $request[$customkey + '_id']);
+                        $customkey = substr($this->_action_type, strlen(self::CUSTOMFIELD_SET_PREFIX));
+
+                        if ($this->getTargetValue())
+                            $issue->setCustomField($customkey, $this->getTargetValue());
+                        else
+                            $issue->setCustomField($customkey, $request[$customkey . '_id']);
                     }
                     else
                     {
@@ -391,6 +398,45 @@
             }
         }
 
+        public function getCustomActionType()
+        {
+            $prefix = $this->isCustomAction(true);
+
+            if (is_null($prefix)) return null;
+
+            return substr($this->_action_type, strlen($prefix));
+        }
+
+        public function isCustomClearAction($only_prefix = false)
+        {
+            return $this->isCustomAction($only_prefix, self::CUSTOMFIELD_CLEAR_PREFIX);
+        }
+
+        public function isCustomSetAction($only_prefix = false)
+        {
+            return $this->isCustomAction($only_prefix, self::CUSTOMFIELD_SET_PREFIX);
+        }
+
+        public function isCustomAction($only_prefix = false, $prefixes = array())
+        {
+            $prefixes = count((array) $prefixes)
+                ? (array) $prefixes
+                : array(self::CUSTOMFIELD_CLEAR_PREFIX, self::CUSTOMFIELD_SET_PREFIX);
+
+            foreach ($prefixes as $prefix) {
+                if (substr(
+                    $this->_action_type,
+                    0,
+                    strlen($prefix)
+                ) == $prefix)
+                {
+                    return $only_prefix ? $prefix : true;
+                }
+            }
+
+            return $only_prefix ? null : false;
+        }
+
         public function isValid(\thebuggenie\core\framework\Request $request)
         {
             if ($this->_target_value) return true;
@@ -407,7 +453,7 @@
                     return (bool) $request->hasParameter('priority_id');
                     break;
                 case self::ACTION_SET_STATUS:
-                    return (bool) $request->hasParameter('status_id');
+                    return (bool) $request->hasParameter('status_id') && ($status = Status::getB2DBTable()->selectById((int) $request->getParameter('status_id'))) instanceof Status && $status->canUserSet(framework\Context::getUser());
                     break;
                 case self::ACTION_SET_REPRODUCABILITY:
                     return (bool) $request->hasParameter('reproducability_id');

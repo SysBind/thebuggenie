@@ -27,6 +27,7 @@
 
         const VERSION = '2.0';
 
+        protected $_name = 'auth_ldap';
         protected $_longname = 'LDAP Authentication';
         protected $_description = 'Allows authentication against a LDAP or Active Directory server';
         protected $_module_config_title = 'LDAP Authentication';
@@ -51,6 +52,11 @@
         public final function getType()
         {
             return parent::MODULE_AUTH;
+        }
+
+        protected function _addListeners()
+        {
+            framework\Event::listen('core', 'thebuggenie\core\modules\configuration\controllers\Main\getAuthenticationMethodForAction', array($this, 'listen_configurationAuthenticationMethod'));
         }
 
         public function postConfigSettings(framework\Request $request)
@@ -121,7 +127,7 @@
 
         public function escape($string)
         {
-            $chars = array('\\', '*', '()', ')', chr(0));
+            $chars = array('*', '()', ')', chr(0));
             foreach ($chars as $char)
             {
                 $string = str_replace($char, '\\' . $char, $string);
@@ -331,7 +337,7 @@
                         {
                             $dn = $data[0][strtolower($dn_attr)][0];
                         }
-                        $bind = $this->bind($connection, $this->escape($dn), $password);
+                        $bind = $this->bind($connection, $this->escape($dn), html_entity_decode($password));
                     }
                     catch (\Exception $e)
                     {
@@ -457,6 +463,13 @@
             else
             {
                 return true;
+            }
+        }
+
+        public function listen_configurationAuthenticationMethod(framework\Event $event)
+        {
+            if (framework\Settings::getAuthenticationBackend() == $this->getName()) {
+                $event->setReturnValue(framework\Action::AUTHENTICATION_METHOD_CORE);
             }
         }
 

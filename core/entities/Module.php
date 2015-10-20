@@ -3,6 +3,8 @@
     namespace thebuggenie\core\entities;
 
     use thebuggenie\core\entities\common\IdentifiableScoped;
+    use thebuggenie\core\entities\tables\Modules;
+    use thebuggenie\core\entities\tables\Settings;
     use thebuggenie\core\framework;
 
     /**
@@ -102,6 +104,14 @@
             return $module;
         }
 
+        public static function unloadModule($module_key)
+        {
+            $module = framework\Context::getModule($module_key);
+            $module->disable();
+            unset($module);
+            framework\Context::unloadModule($module_key);
+        }
+
         protected function _addListeners() { }
 
         abstract protected function _initialize();
@@ -134,7 +144,7 @@
                 $this->_install($scope);
                 $b2db_classpath = THEBUGGENIE_MODULES_PATH . $this->_name . DS . 'entities' . DS . 'tables';
 
-                if (framework\Context::getScope()->isDefault() && is_dir($b2db_classpath))
+                if ($scope == framework\Settings::getDefaultScopeID() && is_dir($b2db_classpath))
                 {
                     $b2db_classpath_handle = opendir($b2db_classpath);
                     while ($table_class_file = readdir($b2db_classpath_handle))
@@ -192,8 +202,8 @@
             framework\Context::clearRoutingCache();
             framework\Context::clearPermissionsCache();
             $this->_upgrade();
-            $this->_version = static::VERSION;
             $this->save();
+            Modules::getTable()->setModuleVersion($this->_name, static::VERSION);
         }
 
         final public function uninstall($scope = null)
@@ -300,7 +310,7 @@
             return framework\Settings::saveSetting($setting, $value, $this->getName(), $scope, $uid);
         }
 
-        public function deleteSetting($setting, $uid = null, $scope = null)
+        public function deleteSetting($setting, $uid = 0, $scope = null)
         {
             return framework\Settings::deleteSetting($setting, $this->getName(), $scope, $uid);
         }
@@ -334,10 +344,10 @@
             return false;
         }
 
-        public function addRoute($key, $url, $function, $params = array(), $csrf_enabled = false, $module_name = null)
+        public function addRoute($key, $url, $function, $params = array(), $options = array(), $module_name = null)
         {
             $module_name = ($module_name !== null) ? $module_name : $this->getName();
-            $this->_routes[] = array($key, $url, $module_name, $function, $params, $csrf_enabled);
+            $this->_routes[] = array($key, $url, $module_name, $function, $params, $options);
         }
 
         final public function initialize()
@@ -445,6 +455,52 @@
         public function setName($name)
         {
             $this->_name = $name;
+        }
+
+        public static function downloadPlugin($plugin_type, $plugin_key)
+        {
+            try
+            {
+                $client = new \Net_Http_Client();
+                $client->get('http://www.thebuggenie.com/'.$plugin_type.'s/'.$plugin_key . '.json');
+                $plugin_json = json_decode($client->getBody());
+            }
+            catch (\Exception $e) {}
+
+            if (isset($plugin_json) && $plugin_json !== false) {
+                $filename = THEBUGGENIE_CACHE_PATH . $plugin_type . '_' . $plugin_json->key . '.zip';
+                $client->get($plugin_json->download);
+                if ($client->getResponse()->getStatus() != 200)
+                {
+                    throw new framework\exceptions\ModuleDownloadException("", framework\exceptions\ModuleDownloadException::JSON_NOT_FOUND);
+                }
+                file_put_contents($filename, $client->getBody());
+                $module_zip = new \ZipArchive();
+                $module_zip->open($filename);
+                switch ($plugin_type) {
+                    case 'addon':
+                        $target_folder = THEBUGGENIE_MODULES_PATH;
+                        break;
+                    case 'theme':
+                        $target_folder = THEBUGGENIE_PATH . 'themes';
+                        break;
+                }
+                $module_zip->extractTo(realpath($target_folder));
+                $module_zip->close();
+                unlink($filename);
+            } else {
+                throw new framework\exceptions\ModuleDownloadException("", framework\exceptions\ModuleDownloadException::FILE_NOT_FOUND);
+            }
+        }
+
+        public static function downloadModule($module_key)
+        {
+            self::downloadPlugin('addon', $module_key);
+        }
+
+        public static function downloadTheme($theme_key)
+        {
+            self::downloadPlugin('theme', $theme_key);
         }
 
     }

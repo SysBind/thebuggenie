@@ -45,7 +45,7 @@
               src: local('Open Sans Bold Italic'), local('OpenSans-BoldItalic'), url('<?php echo $webroot; ?>fonts/open_sans_bold_italic.woff') format('woff'), url('<?php echo $webroot; ?>fonts/open_sans_bold_italic.ttf') format('truetype');
             }
         </style>
-        <link rel="shortcut icon" href="<?php if (\thebuggenie\core\framework\Settings::isUsingCustomFavicon()): echo \thebuggenie\core\framework\Settings::getFaviconURL(); else: echo image_url('favicon.png'); endif; ?>">
+        <link rel="shortcut icon" href="<?php echo (\thebuggenie\core\framework\Context::isProjectContext() && \thebuggenie\core\framework\Context::getCurrentProject()->hasSmallIcon()) ? \thebuggenie\core\framework\Context::getCurrentProject()->getSmallIconName() : (\thebuggenie\core\framework\Settings::isUsingCustomFavicon() ? \thebuggenie\core\framework\Settings::getFaviconURL() : image_url('favicon.png')); ?>">
         <link title="<?php echo (\thebuggenie\core\framework\Context::isProjectContext()) ? __('%project_name search', array('%project_name' => \thebuggenie\core\framework\Context::getCurrentProject()->getName())) : __('%site_name search', array('%site_name' => \thebuggenie\core\framework\Settings::getSiteHeaderName())); ?>" href="<?php echo (\thebuggenie\core\framework\Context::isProjectContext()) ? make_url('project_opensearch', array('project_key' => \thebuggenie\core\framework\Context::getCurrentProject()->getKey())) : make_url('opensearch'); ?>" type="application/opensearchdescription+xml" rel="search">
         <?php foreach ($tbg_response->getFeeds() as $feed_url => $feed_title): ?>
             <link rel="alternate" type="application/rss+xml" title="<?php echo str_replace('"', '\'', $feed_title); ?>" href="<?php echo $feed_url; ?>">
@@ -54,18 +54,31 @@
 
         <?php list ($localcss, $externalcss) = $tbg_response->getStylesheets(); ?>
         <?php foreach ($localcss as $css): ?>
-            <link rel="stylesheet" href="<?php print make_url('home').'css/'.$css; ?>">
+            <link rel="stylesheet" href="<?php print $css; ?>">
         <?php endforeach; ?>
         <?php foreach ($externalcss as $css): ?>
             <link rel="stylesheet" href="<?php echo $css; ?>">
         <?php endforeach; ?>
 
+        <script type="text/javascript" src="<?php echo make_url('home'); ?>js/HackTimer.min.js"></script>
+        <script type="text/javascript" src="<?php echo make_url('home'); ?>js/HackTimer.silent.min.js"></script>
+        <script type="text/javascript" src="<?php echo make_url('home'); ?>js/HackTimerWorker.min.js"></script>
         <script>
+            var bust = function (path) {
+                return path + '?bust=' + <?php echo (\thebuggenie\core\framework\Context::isDebugMode()) ? ' Math.random()' : "'" . \thebuggenie\core\framework\Settings::getVersion() . "'"; ?>;
+            };
+
             var require = {
                 baseUrl: '<?php echo make_url('home'); ?>js',
                 paths: {
                     jquery: 'jquery-2.1.3.min',
-                    'jquery-ui': 'jquery-ui.min'
+                    'jquery-ui': 'jquery-ui.min',
+                    'thebuggenie': bust('thebuggenie.js'),
+                    'thebuggenie/tbg': bust('thebuggenie/tbg.js'),
+                    'thebuggenie/tools': bust('thebuggenie/tools.js'),
+                    'TweenMax': bust('greensock/TweenMax.js'),
+                    'GSDraggable': bust('greensock/utils/Draggable.js'),
+                    'jquery.nanoscroller': bust('jquery.nanoscroller.js')
                 },
                 map: {
                     '*': { 'jquery': 'jquery-private' },
@@ -85,19 +98,71 @@
                         deps: ['prototype'],
                         exports: 'Calendar'
                     },
+                    'effects': {
+                        deps: ['prototype']
+                    },
+                    'controls': {
+                        deps: ['effects']
+                    },
                     'jquery.flot': {
                         deps: ['jquery']
                     },
                     'jquery.flot.selection': {
-                        deps: ['jquery.flot']
+                        deps: ['jquery', 'jquery.flot']
+                    },
+                    'jquery.flot.time': {
+                        deps: ['jquery', 'jquery.flot']
+                    },
+                    'jquery.flot.dashes': {
+                        deps: ['jquery', 'jquery.flot']
                     },
                     'scriptaculous': {
-                        deps: ['prototype', 'effects', 'controls'],
+                        deps: ['prototype', 'controls'],
                         exports: 'Scriptaculous'
                     },
+                    'bootstrap-typeahead': {
+                        deps: ['jquery']
+                    },
+                    'mention': {
+                        deps: ['jquery', 'bootstrap-typeahead']
+                    },
+                    'jquery.nanoscroller': {
+                        deps: ['jquery']
+                    },
+                    'jquery.ba-resize': {
+                        deps: ['jquery']
+                    },
+                    'jquery.ui.touch-punch': {
+                        deps: ['jquery-ui']
+                    },
+                    'jquery.animate-enhanced.min': {
+                        deps: ['jquery']
+                    },
+                     'jquery-ui': {
+                         deps: ['jquery.animate-enhanced.min']
+                     },
                     deps: [<?php echo join(', ', array_map(function ($element) { return "\"{$element}\""; }, $localjs)); ?>]
                 }
             };
+        </script>
+        <script type="text/javascript">
+        //   function startWorker() {
+        //     if(typeof(Worker) !== "undefined") {
+        //       if(typeof(w) == "undefined") {
+        //         wrker = new Worker("<?php echo make_url('home'); ?>js/workers.js");
+        //         wrker.onmessage = function(e) {
+        //           log("Received: " + e.data);
+        //         }
+        //         wrker.postMessage();
+        //       }
+        //       w.onmessage = function(event) {
+        //         document.getElementById("result").innerHTML = event.data;
+        //       };
+        //     } else {
+        //       document.getElementById("result").innerHTML = "Sorry! No Web Worker support.";
+        //     }
+        //   }
+        //   startWorker();
         </script>
         <script data-main="thebuggenie" src="<?php echo make_url('home'); ?>js/require.js"></script>
         <?php foreach ($externaljs as $js): ?>
@@ -109,7 +174,7 @@
         <?php \thebuggenie\core\framework\Event::createNew('core', 'layout.php::header-ends')->trigger(); ?>
     </head>
     <body id="body">
-        <div id="main_container" class="page-<?php echo \thebuggenie\core\framework\Context::getRouting()->getCurrentRouteName(); ?>">
+        <div id="main_container" class="page-<?php echo \thebuggenie\core\framework\Context::getRouting()->getCurrentRouteName(); ?> cf" data-url="<?php echo make_url('userdata'); ?>">
             <?php if (!in_array(\thebuggenie\core\framework\Context::getRouting()->getCurrentRouteName(), array('login_page', 'elevated_login_page', 'reset_password'))): ?>
                 <?php \thebuggenie\core\framework\Logging::log('Rendering header'); ?>
                 <?php require THEBUGGENIE_CORE_PATH . 'templates/headertop.inc.php'; ?>
@@ -127,7 +192,7 @@
         <?php require THEBUGGENIE_CORE_PATH . 'templates/backdrops.inc.php'; ?>
         <script type="text/javascript">
             var TBG, jQuery;
-            require(['domReady', 'thebuggenie/tbg', 'jquery'], function (domReady, tbgjs, jquery) {
+            require(['domReady', 'thebuggenie/tbg', 'jquery', 'jquery.nanoscroller'], function (domReady, tbgjs, jquery, nanoscroller) {
                 domReady(function () {
                     TBG = tbgjs;
                     jQuery = jquery;

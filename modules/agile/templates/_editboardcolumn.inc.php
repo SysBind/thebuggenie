@@ -3,7 +3,7 @@
     use thebuggenie\modules\agile\entities\BoardColumn,
         thebuggenie\modules\agile\entities\AgileBoard;
 
-    $column_id = ($column->getID()) ? $column->getID() : md5(rand(0,1000000));
+    if (! isset($column_id)) $column_id = $column->getColumnOrRandomID();
 
 ?>
 <td>
@@ -13,7 +13,7 @@
         <input type="hidden" name="columns[<?php echo $column_id; ?>][column_id]" value="<?php echo ($column->getID()) ? $column->getID() : ''; ?>">
         <input type="hidden" class="sortorder" name="columns[<?php echo $column_id; ?>][sort_order]" value="<?php echo $column->getSortOrder(); ?>">
         <label for="boardcolumn_<?php echo $column_id; ?>_name_input"><?php echo __('Column name'); ?></label>
-        <input type="text" class="column-name" name="columns[<?php echo $column_id; ?>][name]" id="boardcolumn_<?php echo $column_id; ?>_name_input" value="<?php echo tbg_template_escape($column->getName()); ?>" placeholder="<?php echo __e('Column status (ex: New, Done)'); ?>">
+        <input type="text" class="column-name" name="columns[<?php echo $column_id; ?>][name]" id="boardcolumn_<?php echo $column_id; ?>_name_input" value="<?php echo tbg_template_escape($column->getName()); ?>" placeholder="<?php echo __('Column status (ex: New, Done)'); ?>">
         <?php if ($column->getBoard()->getType() == AgileBoard::TYPE_KANBAN): ?>
             <label for="boardcolumn_<?php echo $column_id; ?>_min_workitems_input" class="workload-label"><?php echo __('Min workload'); ?></label>
             <label for="boardcolumn_<?php echo $column_id; ?>_max_workitems_input" class="workload-label"><?php echo __('Max workload'); ?></label>

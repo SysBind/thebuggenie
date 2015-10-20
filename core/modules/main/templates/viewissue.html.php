@@ -1,15 +1,12 @@
 <?php if ($issue instanceof \thebuggenie\core\entities\Issue): ?>
     <?php
 
-        $tbg_response->addBreadcrumb(__('Issues'), make_url('project_issues', array('project_key' => \thebuggenie\core\framework\Context::getCurrentProject()->getKey())), tbg_get_breadcrumblinks('project_summary', \thebuggenie\core\framework\Context::getCurrentProject()));
+        $tbg_response->addBreadcrumb(__('Issues'), make_url('project_issues', array('project_key' => \thebuggenie\core\framework\Context::getCurrentProject()->getKey())));
         $tbg_response->addBreadcrumb($issue->getFormattedIssueNo(true, true), make_url('viewissue', array('project_key' => $issue->getProject()->getKey(), 'issue_no' => $issue->getFormattedIssueNo())));
         $tbg_response->setTitle('['.(($issue->isClosed()) ? mb_strtoupper(__('Closed')) : mb_strtoupper(__('Open'))) .'] ' . $issue->getFormattedIssueNo(true) . ' - ' . tbg_decodeUTF8($issue->getTitle()));
 
     ?>
     <?php \thebuggenie\core\framework\Event::createNew('core', 'viewissue_top', $issue)->trigger(); ?>
-    <?php if ($issue->canAttachLinks()): ?>
-        <?php include_component('main/attachlink', array('issue' => $issue)); ?>
-    <?php endif; ?>
     <div id="issuetype_indicator_fullpage" style="display: none;" class="fullpage_backdrop">
         <div style="position: absolute; top: 45%; left: 40; z-index: 100001; color: #FFF; font-size: 15px; font-weight: bold;">
             <?php echo image_tag('spinning_32.gif'); ?><br>
@@ -52,18 +49,18 @@
                     <td class="title_left_images">
                         <?php echo image_tag((($issue->hasIssueType()) ? $issue->getIssueType()->getIcon() : 'icon_unknown') . '_small.png', array('id' => 'issuetype_image')); ?>
                     </td>
-                    <td id="title_field">
-                        <div class="viewissue_title hoverable">
-                            <span class="faded_out <?php if ($issue->isTitleChanged()): ?>issue_detail_changed<?php endif; ?><?php if (!$issue->isTitleMerged()): ?> issue_detail_unmerged<?php endif; ?>" id="title_header">
+                    <td id="title_field" class="<?php if ($issue->isTitleChanged()): ?>issue_detail_changed<?php endif; ?><?php if (!$issue->isTitleMerged()): ?> issue_detail_unmerged<?php endif; ?> hoverable">
+                        <div class="viewissue_title">
+                            <span class="faded_out" id="title_header">
                                 <?php include_component('issueparent_crumbs', array('issue' => $issue)); ?>
                             </span>
                             <span id="issue_title">
                                 <?php if ($issue->isEditable() && $issue->canEditTitle()): ?>
-                                    <?php echo image_tag('icon_edit.png', array('class' => 'dropdown', 'id' => 'title_edit', 'onclick' => "$('title_change').show(); $('title_name').hide(); $('no_title').hide();")); ?>
+                                    <?php echo image_tag('icon_edit.png', array('class' => 'dropdown', 'id' => 'title_edit', 'onclick' => "$('title_field').toggleClassName('editing');$('title_change').show(); $('title_name').hide(); $('no_title').hide();")); ?>
                                     <a class="undo" href="javascript:void(0);" onclick="TBG.Issues.Field.revert('<?php echo make_url('issue_revertfield', array('project_key' => $issue->getProject()->getKey(), 'issue_id' => $issue->getID(), 'field' => 'title')); ?>', 'title');" title="<?php echo __('Undo this change'); ?>"><?php echo image_tag('undo.png', array('class' => 'undo')); ?></a>
                                     <?php echo image_tag('spinning_16.gif', array('style' => 'display: none; float: left; margin-right: 5px;', 'id' => 'title_undo_spinning')); ?>
                                 <?php endif; ?>
-                                <span id="title_content" class="<?php if ($issue->isTitleChanged()): ?>issue_detail_changed<?php endif; ?><?php if (!$issue->isTitleMerged()): ?> issue_detail_unmerged<?php endif; ?>">
+                                <span id="title_content">
                                     <span class="faded_out" id="no_title" <?php if ($issue->getTitle() != ''):?> style="display: none;" <?php endif; ?>><?php echo __('Nothing entered.'); ?></span>
                                     <span id="title_name" title="<?php echo tbg_decodeUTF8($issue->getTitle()); ?>">
                                         <?php echo tbg_decodeUTF8($issue->getTitle()); ?>
@@ -73,7 +70,7 @@
                             <?php if ($issue->isEditable() && $issue->canEditTitle()): ?>
                             <span id="title_change" style="display: none;">
                                 <form id="title_form" action="<?php echo make_url('issue_setfield', array('project_key' => $issue->getProject()->getKey(), 'issue_id' => $issue->getID(), 'field' => 'title')); ?>" method="post" onSubmit="TBG.Issues.Field.set('<?php echo make_url('issue_setfield', array('project_key' => $issue->getProject()->getKey(), 'issue_id' => $issue->getID(), 'field' => 'title')) ?>', 'title'); return false;">
-                                    <input type="text" name="value" value="<?php echo $issue->getTitle(); ?>" /><?php echo __('%save or %cancel', array('%save' => '<input type="submit" style="font-size: 1em; margin: -3px 5px 2px 0; padding: 2px 10px !important;" value="'.__('Save').'">', '%cancel' => '<a href="#" onclick="$(\'title_change\').hide(); $(\'title_name\').show(); return false;">'.__('cancel').'</a>')); ?>
+                                    <input type="text" name="value" value="<?php echo $issue->getTitle(); ?>"><span class="title_form_save_container"><?php echo __('%cancel or %save', array('%save' => '<input type="submit" class="button button-silver" value="'.__('Save').'">', '%cancel' => '<a href="#" onclick="$(\'title_field\').toggleClassName(\'editing\');$(\'title_change\').hide(); $(\'title_name\').show(); return false;">'.__('cancel').'</a>')); ?></span>
                                 </form>
                                 <?php echo image_tag('spinning_16.gif', array('style' => 'display: none; float: left; margin-right: 5px;', 'id' => 'title_spinning')); ?>
                                 <span id="title_change_error" class="error_message" style="display: none;"></span>
@@ -81,7 +78,7 @@
                             <?php endif; ?>
                         </div>
                     </td>
-                    <td style="width: 100px; text-align: right;<?php if (!$issue->isVotesVisible()): ?> display: none;<?php endif; ?>" id="votes_additional">
+                    <td style="width: 100px; text-align: right;<?php if (!$issue->isVotesVisible()): ?> display: none;<?php endif; ?>" id="votes_additional"<?php if ($issue->isVotesVisible()): ?> class="visible"<?php endif; ?>>
                         <div id="viewissue_votes">
                             <table align="right">
                                 <tr>
@@ -107,7 +104,7 @@
                             </table>
                         </div>
                     </td>
-                    <td style="width: 80px;<?php if (!$issue->isUserPainVisible()): ?> display: none;<?php endif; ?>" id="user_pain_additional">
+                    <td style="width: 80px;<?php if (!$issue->isUserPainVisible()): ?> display: none;<?php endif; ?>" id="user_pain_additional"<?php if ($issue->isVotesVisible()): ?> class="visible"<?php endif; ?>>
                         <div title="<?php echo __('This is the user pain value for this issue'); ?>" id="viewissue_triaging">
                             <div class="user_pain" id="issue_user_pain"><?php echo $issue->getUserPain(); ?></div>
                             <div class="user_pain_calculated" id="issue_user_pain_calculated"><?php echo $issue->getUserPainDiffText(); ?></div>
@@ -151,54 +148,7 @@
                         <?php if ($error == 'transition_error'): ?>
                             <div class="header"><?php echo __('There was an error trying to move this issue to the next step in the workflow'); ?></div>
                             <div class="content" style="text-align: left;">
-                                <?php echo __('The following actions could not be performed because of missing or invalid values: %list', array('%list' => '')); ?><br>
-                                <ul>
-                                    <?php foreach (\thebuggenie\core\framework\Context::getMessageAndClear('issue_workflow_errors') as $error_field): ?>
-                                        <li><?php
-
-                                            switch ($error_field)
-                                            {
-                                                case \thebuggenie\core\entities\WorkflowTransitionValidationRule::RULE_MAX_ASSIGNED_ISSUES:
-                                                    echo __('Could not assign issue to the selected user because this users assigned issues limit is reached');
-                                                    break;
-                                                case \thebuggenie\core\entities\WorkflowTransitionValidationRule::RULE_PRIORITY_VALID:
-                                                    echo __('Could not set priority');
-                                                    break;
-                                                case \thebuggenie\core\entities\WorkflowTransitionValidationRule::RULE_REPRODUCABILITY_VALID:
-                                                    echo __('Could not set reproducability');
-                                                    break;
-                                                case \thebuggenie\core\entities\WorkflowTransitionValidationRule::RULE_RESOLUTION_VALID:
-                                                    echo __('Could not set resolution');
-                                                    break;
-                                                case \thebuggenie\core\entities\WorkflowTransitionValidationRule::RULE_STATUS_VALID:
-                                                    echo __('Could not set status');
-                                                    break;
-                                                case \thebuggenie\core\entities\WorkflowTransitionAction::ACTION_ASSIGN_ISSUE:
-                                                    echo __('Could not assign issue to the any user or team because none were provided');
-                                                    break;
-                                                case \thebuggenie\core\entities\WorkflowTransitionAction::ACTION_SET_MILESTONE:
-                                                    echo __('Could not assign the issue to a milestone because none was provided');
-                                                    break;
-                                                case \thebuggenie\core\entities\WorkflowTransitionAction::ACTION_SET_PRIORITY:
-                                                    echo __('Could not set issue priority because none was provided');
-                                                    break;
-                                                case \thebuggenie\core\entities\WorkflowTransitionAction::ACTION_SET_REPRODUCABILITY:
-                                                    echo __('Could not set issue reproducability because none was provided');
-                                                    break;
-                                                case \thebuggenie\core\entities\WorkflowTransitionAction::ACTION_SET_RESOLUTION:
-                                                    echo __('Could not set issue resolution because none was provided');
-                                                    break;
-                                                case \thebuggenie\core\entities\WorkflowTransitionAction::ACTION_SET_STATUS:
-                                                    echo __('Could not set issue status because none was provided');
-                                                    break;
-                                                default:
-                                                    echo $error_field;
-                                                    break;
-                                            }
-
-                                        ?></li>
-                                    <?php endforeach; ?>
-                                </ul>
+                                <?php include_component('main/issue_transition_error'); ?>
                             </div>
                         <?php else: ?>
                             <div class="header"><?php echo __('There was an error trying to save changes to this issue'); ?></div>
@@ -308,11 +258,11 @@
                             <legend id="description_header">
                                 <?php if ($issue->isEditable() && $issue->canEditDescription()): ?>
                                     <a href="javascript:void(0);" onclick="TBG.Issues.Field.revert('<?php echo make_url('issue_revertfield', array('project_key' => $issue->getProject()->getKey(), 'issue_id' => $issue->getID(), 'field' => 'description')); ?>', 'description');" title="<?php echo __('Undo this change'); ?>"><?php echo image_tag('undo.png', array('class' => 'undo')); ?></a> <?php echo image_tag('spinning_16.gif', array('style' => 'display: none; float: left; margin-right: 5px;', 'id' => 'description_undo_spinning')); ?>
-                                    <?php echo image_tag('icon_edit.png', array('class' => 'dropdown', 'id' => 'description_edit', 'onclick' => "$('description_change').show(); $('description_name').hide(); $('no_description').hide();", 'title' => __('Click here to edit description'))); ?>
+                                    <?php echo image_tag('icon_edit.png', array('class' => 'dropdown', 'id' => 'description_edit', 'onclick' => "$('description_edit').show('inline'); $('description_change').show(); $('description_name').hide(); $('no_description').hide();", 'title' => __('Click here to edit description'))); ?>
                                 <?php endif; ?>
                                 <?php echo __('Description'); ?>
                             </legend>
-                            <div id="description_content" class="<?php if ($issue->isDescriptionChanged()): ?>issue_detail_changed<?php endif; ?><?php if (!$issue->isDescriptionMerged()): ?> issue_detail_unmerged<?php endif; ?>">
+                            <div id="description_content">
                                 <div class="faded_out" id="no_description" <?php if ($issue->getDescription() != ''):?> style="display: none;" <?php endif; ?>><?php echo __('Nothing entered.'); ?></div>
                                 <div id="description_name" class="issue_inline_description">
                                     <?php if ($issue->getDescription()): ?>
@@ -321,11 +271,12 @@
                                 </div>
                             </div>
                             <?php if ($issue->isEditable() && $issue->canEditDescription()): ?>
-                                <div id="description_change" style="display: none;">
+                                <div id="description_change" style="display: none;" class="editor_container">
                                     <form id="description_form" action="<?php echo make_url('issue_setfield', array('project_key' => $issue->getProject()->getKey(), 'issue_id' => $issue->getID(), 'field' => 'description')); ?>" method="post" onSubmit="TBG.Issues.Field.set('<?php echo make_url('issue_setfield', array('project_key' => $issue->getProject()->getKey(), 'issue_id' => $issue->getID(), 'field' => 'description')) ?>', 'description'); return false;">
-                                        <?php include_component('main/textarea', array('area_name' => 'value', 'target_type' => 'issue', 'target_id' => $issue->getID(), 'area_id' => 'description_form_value', 'syntax' => (($issue->getDescriptionSyntax() == \thebuggenie\core\framework\Settings::SYNTAX_MW) ? 'mw' : 'md'), 'height' => '250px', 'width' => '100%', 'value' => htmlentities($issue->getDescription(), ENT_COMPAT, \thebuggenie\core\framework\Context::getI18n()->getCharset()))); ?>
-                                        <br>
-                                        <input class="button button-silver" style="float: left; margin: -3px 5px 0 0; font-weight: bold;" type="submit" value="<?php echo __('Save'); ?>"><?php echo __('%save or %cancel', array('%save' => '', '%cancel' => javascript_link_tag(__('cancel'), array('style' => 'font-weight: bold;', 'onclick' => "$('description_change').hide();".(($issue->getDescription() != '') ? "$('description_name').show();" : "$('no_description').show();")."return false;")))); ?>
+                                        <?php include_component('main/textarea', array('area_name' => 'value', 'target_type' => 'issue', 'target_id' => $issue->getID(), 'area_id' => 'description_form_value', 'syntax' => \thebuggenie\core\framework\Settings::getSyntaxClass($issue->getDescriptionSyntax()), 'height' => '250px', 'width' => '100%', 'value' => htmlentities($issue->getDescription(), ENT_COMPAT, \thebuggenie\core\framework\Context::getI18n()->getCharset()))); ?>
+                                        <div class="textarea_save_container">
+                                            <?php echo __('%cancel or %save', array('%save' => '<input class="button button-silver" type="submit" value="'.__('Save').'">', '%cancel' => javascript_link_tag(__('Cancel'), array('onclick' => "$('description_edit').style.display = '';$('description_change').hide();".(($issue->getDescription() != '') ? "$('description_name').show();" : "$('no_description').show();")."return false;")))); ?>
+                                        </div>
                                     </form>
                                     <?php echo image_tag('spinning_16.gif', array('style' => 'display: none; float: left; margin-right: 5px;', 'id' => 'description_spinning')); ?>
                                     <div id="description_change_error" class="error_message" style="display: none;"></div>
@@ -340,7 +291,7 @@
                                 <?php endif; ?>
                                 <?php echo __('Steps to reproduce this issue'); ?>
                             </legend>
-                            <div id="reproduction_steps_content" class="<?php if ($issue->isReproduction_StepsChanged()): ?>issue_detail_changed<?php endif; ?><?php if (!$issue->isReproduction_StepsMerged()): ?> issue_detail_unmerged<?php endif; ?>">
+                            <div id="reproduction_steps_content">
                                 <div class="faded_out" id="no_reproduction_steps" <?php if ($issue->getReproductionSteps() != ''):?> style="display: none;" <?php endif; ?>><?php echo __('Nothing entered.'); ?></div>
                                 <div id="reproduction_steps_name" class="issue_inline_description">
                                     <?php if ($issue->getReproductionSteps()): ?>
@@ -349,11 +300,12 @@
                                 </div>
                             </div>
                             <?php if ($issue->isEditable() && $issue->canEditReproductionSteps()): ?>
-                                <div id="reproduction_steps_change" style="display: none;">
+                                <div id="reproduction_steps_change" style="display: none;" class="editor_container">
                                     <form id="reproduction_steps_form" action="<?php echo make_url('issue_setfield', array('project_key' => $issue->getProject()->getKey(), 'issue_id' => $issue->getID(), 'field' => 'reproduction_steps')); ?>" method="post" onSubmit="TBG.Issues.Field.set('<?php echo make_url('issue_setfield', array('project_key' => $issue->getProject()->getKey(), 'issue_id' => $issue->getID(), 'field' => 'reproduction_steps')) ?>', 'reproduction_steps'); return false;">
-                                        <?php include_component('main/textarea', array('area_name' => 'value', 'target_type' => 'issue', 'target_id' => $issue->getID(), 'area_id' => 'reproduction_steps_form_value', 'syntax' => (($issue->getReproductionStepsSyntax() == \thebuggenie\core\framework\Settings::SYNTAX_MW) ? 'mw' : 'md'), 'height' => '250px', 'width' => '100%', 'value' => htmlentities($issue->getReproductionSteps(), ENT_COMPAT, \thebuggenie\core\framework\Context::getI18n()->getCharset()))); ?>
-                                        <br>
-                                        <input class="button button-silver" style="float: left; margin: -3px 5px 0 0; font-weight: bold;" type="submit" value="<?php echo __('Save'); ?>"><?php echo __('%save or %cancel', array('%save' => '', '%cancel' => javascript_link_tag(__('cancel'), array('style' => 'font-weight: bold;', 'onclick' => "$('reproduction_steps_change').hide();".(($issue->getReproductionSteps() != '') ? "$('reproduction_steps_name').show();" : "$('no_reproduction_steps').show();")."return false;")))); ?>
+                                        <?php include_component('main/textarea', array('area_name' => 'value', 'target_type' => 'issue', 'target_id' => $issue->getID(), 'area_id' => 'reproduction_steps_form_value', 'syntax' => \thebuggenie\core\framework\Settings::getSyntaxClass($issue->getReproductionStepsSyntax()), 'height' => '250px', 'width' => '100%', 'value' => htmlentities($issue->getReproductionSteps(), ENT_COMPAT, \thebuggenie\core\framework\Context::getI18n()->getCharset()))); ?>
+                                        <div class="textarea_save_container">
+                                            <?php echo __('%cancel or %save', array('%save' => '<input class="button button-silver" type="submit" value="'.__('Save').'">', '%cancel' => javascript_link_tag(__('Cancel'), array('onclick' => "$('reproduction_steps_change').hide();".(($issue->getReproductionSteps() != '') ? "$('reproduction_steps_name').show();" : "$('no_reproduction_steps').show();")."return false;")))); ?>
+                                        </div>
                                     </form>
                                     <?php echo image_tag('spinning_16.gif', array('style' => 'display: none; float: left; margin-right: 5px;', 'id' => 'reproduction_steps_spinning')); ?>
                                     <div id="reproduction_steps_change_error" class="error_message" style="display: none;"></div>
@@ -367,7 +319,7 @@
                                 <?php echo __('Comments (%count)', array('%count' => '<span id="viewissue_comment_count">'.$issue->countUserComments().'</span>')); ?>
                                 <div class="dropper_container">
                                     <?php echo image_tag('icon-mono-settings.png', array('class' => 'dropper')); ?>
-                                    <ul class="simple_list rounded_box white shadowed more_actions_dropdown dropdown_box popup_box leftie">
+                                    <ul class="more_actions_dropdown dropdown_box popup_box leftie">
                                         <li><a href="javascript:void(0);" id="comments_show_system_comments_toggle" onclick="$$('#comments_box .system_comment').each(function (elm) { $(elm).toggle(); });" /><?php echo __('Toggle system-generated comments'); ?></a></li>
                                     </ul>
                                 </div>
@@ -403,34 +355,25 @@
                                 <?php echo image_tag('sidebar_expand.png', array('class' => 'expander')); ?>
                             </a>
                         </div>
-                        <?php include_component('main/issuedetailslisteditable', array('issue' => $issue)); ?>
+                        <div class="issue_details_fieldsets_wrapper"><?php include_component('main/issuedetailslisteditable', array('issue' => $issue)); ?></div>
                         <div style="clear: both; margin-bottom: 5px;"> </div>
                     </div>
                 </div>
             </div>
         </div>
     </div>
-    <div id="workflow_transition_container" style="display: none;">
-        <?php if ($issue->isWorkflowTransitionsAvailable()): ?>
-            <?php foreach ($issue->getAvailableWorkflowTransitions() as $transition): ?>
-                <?php if ($transition instanceof \thebuggenie\core\entities\WorkflowTransition && $transition->hasTemplate()): ?>
-                    <?php include_component($transition->getTemplate(), compact('issue', 'transition')); ?>
-                <?php endif; ?>
-            <?php endforeach; ?>
-        <?php endif; ?>
-    </div>
-    <div id="workflow_transition_fullpage" class="fullpage_backdrop" style="display: none;"></div>
+    <?php include_component('main/issue_workflow_transition', compact('issue')); ?>
     <?php if ($tbg_user->isViewissueTutorialEnabled()): ?>
         <?php include_component('main/tutorial_viewissue', compact('issue')); ?>
     <?php endif; ?>
 <?php elseif (isset($issue_deleted)): ?>
     <div class="greenbox" id="issue_deleted_message">
-        <div class="header"><?php echo __("The issue has been deleted"); ?></div>
-        <div class="content"><?php echo __("The issue you selected has been deleted. This message will disappear when you reload the page."); ?></div>
+        <div class="header"><?php echo __("This issue has been deleted"); ?></div>
+        <div class="content"><?php echo __("This message will disappear when you reload the page."); ?></div>
     </div>
 <?php else: ?>
     <div class="redbox" id="notfound_error">
-        <div class="header"><?php echo __("You have specified an issue that can't be shown"); ?></div>
-        <div class="content"><?php echo __("This could be because you the issue doesn't exist, has been deleted or you don't have permission to see it"); ?></div>
+        <div class="header"><?php echo __("This issue can not be displayed"); ?></div>
+        <div class="content"><?php echo __("This issue either does not exist, has been deleted or you do not have permission to view it."); ?></div>
     </div>
 <?php endif; ?>

@@ -2,7 +2,7 @@
 
     use thebuggenie\modules\agile\entities\AgileBoard;
 
-    $tbg_response->addBreadcrumb(__('Planning'), null, tbg_get_breadcrumblinks('project_summary', $selected_project));
+    $tbg_response->addBreadcrumb(__('Planning'), make_url('agile_board', array('project_key' => $selected_project->getKey(), 'board_id' => $board->getId())));
     $tbg_response->setTitle(__('"%project_name" project planning', array('%project_name' => $selected_project->getName())));
     include_component('project/projectheader', array('selected_project' => $selected_project, 'subpage' => $board->getName()));
 
@@ -16,7 +16,7 @@
         case AgileBoard::TYPE_SCRUM:
         case AgileBoard::TYPE_KANBAN:
             $newmilestonelabel = __('Add new sprint');
-            $togglemilestoneslabel = __('Toggle past, unfinished sprints');
+            $togglemilestoneslabel = __('Toggle hidden sprints');
             $addmilestoneslabel = __('There are no active sprints. Why not add one?');
             break;
     }
@@ -39,7 +39,7 @@
                 <?php if ($board->getEpicIssuetypeID()): ?>
                     <button class="button button-silver" id="epics_toggler_button" onclick="$(this).toggleClassName('button-pressed');$('epics_list').toggleClassName('expanded');" disabled><?php echo __('Epics'); ?></button>
                 <?php endif; ?>
-                <?php echo javascript_link_tag($newmilestonelabel, array('class' => 'button button-silver', 'onclick' => "TBG.Main.Helpers.Backdrop.show('".make_url('get_partial_for_backdrop', array('key' => 'milestone', 'project_id' => $board->getProject()->getId(), 'board_id' => $board->getID()))."');")); ?>
+                <?php echo javascript_link_tag($newmilestonelabel, array('class' => 'button button-silver', 'onclick' => "TBG.Main.Helpers.Backdrop.show('".make_url('get_partial_for_backdrop', array('key' => 'agilemilestone', 'project_id' => $board->getProject()->getId(), 'board_id' => $board->getID()))."');")); ?>
                 <?php echo image_tag('spinning_16.gif', array('id' => 'retrieve_indicator', 'class' => 'indicator', 'style' => 'display: none;')); ?>
                 <?php if ($tbg_user->canManageProjectReleases($selected_project)): ?>
                     <?php echo image_tag('icon-mono-settings.png', array('class' => 'dropper dropdown_link planning_board_settings_gear', 'id' => 'planning_board_settings_gear')); ?>
@@ -47,7 +47,7 @@
                         <li><?php echo javascript_link_tag(__('Sort milestones'), array('onclick' => "TBG.Project.Planning.toggleMilestoneSorting();")); ?></li>
                         <li class="separator"></li>
                         <li><?php echo javascript_link_tag(__('Toggle closed issues'), array('onclick' => "TBG.Project.Planning.toggleClosedIssues(this);")); ?></li>
-                        <li><?php echo javascript_link_tag($togglemilestoneslabel, array('onclick' => "$('planning_container').toggleClassName('show_unavailable');TBG.Main.Helpers.toggler(jQuery('#more_actions_milestones_button'));")); ?></li>
+                        <li><?php echo javascript_link_tag($togglemilestoneslabel, array('onclick' => "$('planning_container').toggleClassName('show_unavailable');TBG.Main.Profile.clearPopupsAndButtons();")); ?></li>
                     </ul>
                 <?php endif; ?>
             </div>
@@ -70,7 +70,7 @@
                     </tr>
                 </table>
             <?php endif; ?>
-            <ul id="milestone_list" class="jsortable" data-sort-url="<?php echo make_url('agile_sort_milestones', array('project_key' => $selected_project->getKey())); ?>">
+            <ul id="milestone_list" class="jsortable" data-sort-url="<?php echo make_url('project_sort_milestones', array('project_key' => $selected_project->getKey())); ?>">
                 <?php foreach ($board->getMilestones() as $milestone): ?>
                     <?php include_component('milestonebox', array('milestone' => $milestone, 'board' => $board, 'include_counts' => !$milestone->isVisibleRoadmap())); ?>
                 <?php endforeach; ?>

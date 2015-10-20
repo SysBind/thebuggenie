@@ -170,12 +170,12 @@
 <?php elseif ($issue instanceof \thebuggenie\core\entities\Issue): ?>
     <div class="rounded_box report_issue_desc <?php if (!$tbg_request->isAjaxCall()): ?>green<?php endif; ?> borderless" style="margin-bottom: 10px;" id="report_issue_reported_issue_details">
         <div style="font-size: 1.1em;">
-            <strong><?php echo __('The following issue was reported: %issue_title', array('%issue_title' => '')); ?>:</strong>
+            <strong><?php echo __('The following issue was reported: %issue_title', array('%issue_title' => '')); ?></strong>
             <?php echo link_tag(make_url('viewissue', array('project_key' => $issue->getProject()->getKey(), 'issue_no' => $issue->getFormattedIssueNo())), $issue->getFormattedIssueNo(true) . ' - ' . $issue->getTitle()); ?><br>
         </div>
         <span class="faded_out"><?php echo __('Click the link to visit the reported issue'); ?></span>
     </div>
-    <a class="button button-silver" id="report_issue_report_another_button" onclick="[$(this), $('report_issue_form'), $('report_more_here'), $('report_form'), $('issuetype_list'), $('report_issue_reported_issue_details')].each(function (el) { Element.toggle(el, 'block'); });"><?php echo __('Report another issue'); ?></a>
+    <a class="button button-silver" id="report_issue_report_another_button" onclick="[$(this), $('report_issue_form'), $('report_more_here'), $('report_form'), $('issuetype_list'), $('report_issue_reported_issue_details')].each(function (el) { Element.toggle(el, 'block'); });$('reportissue_container').removeClassName('medium');$('reportissue_container').addClassName('huge');"><?php echo __('Report another issue'); ?></a>
 <?php endif; ?>
 <?php if ($tbg_request->isAjaxCall()): ?>
     <form action="<?php echo make_url('project_reportissue', array('project_key' => $selected_project->getKey())); ?>" method="post" accept-charset="<?php echo \thebuggenie\core\framework\Context::getI18n()->getCharset(); ?>" onsubmit="TBG.Main.submitIssue('<?php echo make_url('project_reportissue', array('project_key' => $selected_project->getKey(), 'return_format' => 'planning')); ?>');return false;" id="report_issue_form" style="<?php if (isset($issue) && $issue instanceof \thebuggenie\core\entities\Issue) echo 'display: none;'; ?>">
@@ -199,7 +199,11 @@
                         <input type="hidden" name="parent_issue_id" id="reportissue_parent_issue_id" value="<?php echo $parent_issue->getID(); ?>">
                         <?php if ($issue instanceof \thebuggenie\core\entities\Issue): ?>
                         <script>
-                            TBG.Issues.refreshRelatedIssues('<?php echo make_url('viewissue_related_issues', array('project_key' => $issue->getProject()->getKey(), 'issue_id' => $parent_issue->getID())); ?>');
+                            require(['domReady', 'thebuggenie/tbg'], function (domReady, TBG) {
+                                domReady(function () {
+                                    TBG.Issues.refreshRelatedIssues('<?php echo make_url('viewissue_related_issues', array('project_key' => $issue->getProject()->getKey(), 'issue_id' => $parent_issue->getID())); ?>');
+                                });
+                            });
                         </script>
                         <?php endif; ?>
                     </li>
@@ -219,7 +223,7 @@
                 <?php include_component('publish/articledisplay', array('article' => $introarticle, 'show_title' => false, 'show_details' => false, 'show_actions' => false, 'embedded' => true)); ?>
             <?php endif; ?>
             <?php foreach ($issuetypes as $issuetype): ?>
-                <?php if (!$selected_project->getIssuetypeScheme()->isIssuetypeReportable($issuetype) && !$tbg_request->isAjaxCall()) continue; ?>
+                <?php if (!$selected_project->getIssuetypeScheme()->isIssuetypeReportable($issuetype)) continue; ?>
                 <?php if (isset($board) && $issuetype->getID() == $board->getEpicIssuetypeID()) continue; ?>
                 <a class="button button-silver" data-key="<?php echo $issuetype->getKey(); ?>" data-id="<?php echo $issuetype->getID(); ?>" href="javascript:void(0);">
                     <?php echo image_tag($issuetype->getIcon() . '.png'); ?>
@@ -228,33 +232,35 @@
             <?php endforeach; ?>
         </div>
         <script type="text/javascript">
-        (function($) {
-            var issueDescriptions = {
-            <?php foreach ($issuetypes as $issuetype): ?>
-                <?php if (!$selected_project->getIssuetypeScheme()->isIssuetypeReportable($issuetype) && !$tbg_request->isAjaxCall()) continue; ?>
-                "<?php echo $issuetype->getKey(); ?>" : "<?php echo $issuetype->getDescription(); ?>",
-            <?php endforeach; ?>
-            };
+            require(['domReady', 'thebuggenie/tbg', 'jquery'], function (domReady, tbgjs, $) {
+                domReady(function () {
+                    var issueDescriptions = {
+                    <?php foreach ($issuetypes as $issuetype): ?>
+                        <?php if (!$selected_project->getIssuetypeScheme()->isIssuetypeReportable($issuetype) && !$tbg_request->isAjaxCall()) continue; ?>
+                        "<?php echo $issuetype->getKey(); ?>" : "<?php echo $issuetype->getDescription(); ?>",
+                    <?php endforeach; ?>
+                    };
 
-            var cachedHelp = $("#issuetype_description_help").text();
+                    var cachedHelp = $("#issuetype_description_help").text();
 
-            $(".issuetype_list a").each(function() {
-                var issueType = $(this);
-                var issueKey = issueType.attr("data-key");
+                    $(".issuetype_list a").each(function() {
+                        var issueType = $(this);
+                        var issueKey = issueType.attr("data-key");
 
-                issueType
-                .click(function() {
-                    $('#issuetype_id').val(issueType.attr("data-id") * 1);
-                    TBG.Issues.updateFields('<?php echo make_url('getreportissuefields', array('project_key' => $selected_project->getKey())); ?>');
-                })
-                .mouseover(function() {
-                    $('#issuetype_description_help').text(issueDescriptions[issueKey]);
-                })
-                .mouseout(function() {
-                    $('#issuetype_description_help').text(cachedHelp);
+                        issueType
+                        .click(function() {
+                            $('#issuetype_id').val(issueType.attr("data-id") * 1);
+                            TBG.Issues.updateFields('<?php echo make_url('getreportissuefields', array('project_key' => $selected_project->getKey())); ?>');
+                        })
+                        .mouseover(function() {
+                            $('#issuetype_description_help').text(issueDescriptions[issueKey]);
+                        })
+                        .mouseout(function() {
+                            $('#issuetype_description_help').text(cachedHelp);
+                        });
+                    });
                 });
             });
-        })(jQuery);
         </script>
     <?php endif; ?>
     <div style="clear: both;"></div>
@@ -311,8 +317,8 @@
                     <td class="report_issue_help faded_out dark"><?php echo __('Describe the issue in as much detail as possible. More is better.'); ?></td>
                 </tr>
                 <tr>
-                    <td colspan="2" style="padding-top: 5px;">
-                        <?php include_component('main/textarea', array('area_name' => 'description', 'target_type' => 'project', 'target_id' => $selected_project->getID(), 'height' => ($tbg_request->isAjaxCall() ? '150px' : '250px'), 'width' => '990px', 'syntax' => $tbg_user->getPreferredIssuesSyntax(true), 'value' => ((isset($selected_description)) ? $selected_description : null))); ?>
+                    <td colspan="2" style="padding-top: 5px;" class="editor_container">
+                        <?php include_component('main/textarea', array('area_name' => 'description', 'target_type' => 'project', 'target_id' => $selected_project->getID(), 'height' => '300px', 'width' => '990px', 'syntax' => $tbg_user->getPreferredIssuesSyntax(true), 'value' => ((isset($selected_description)) ? $selected_description : null))); ?>
                     </td>
                 </tr>
             </table>
@@ -322,15 +328,15 @@
                     <td class="report_issue_help faded_out dark"><?php echo __('Enter the steps necessary to reproduce the issue, as detailed as possible.'); ?></td>
                 </tr>
                 <tr>
-                    <td colspan="2" style="padding-top: 5px;">
-                        <?php include_component('textarea', array('area_name' => 'reproduction_steps', 'target_type' => 'project', 'target_id' => $selected_project->getID(), 'height' => '250px', 'width' => '990px', 'syntax' => $tbg_user->getPreferredIssuesSyntax(true), 'value' => ((isset($selected_reproduction_steps)) ? $selected_reproduction_steps : null))); ?>
+                    <td colspan="2" style="padding-top: 5px;" class="editor_container">
+                        <?php include_component('textarea', array('area_name' => 'reproduction_steps', 'target_type' => 'project', 'target_id' => $selected_project->getID(), 'height' => '300px', 'width' => '990px', 'syntax' => $tbg_user->getPreferredIssuesSyntax(true), 'value' => ((isset($selected_reproduction_steps)) ? $selected_reproduction_steps : null))); ?>
                     </td>
                 </tr>
             </table>
             <?php if ($canupload): ?>
                 <?php include_component('main/dynamicuploader', array('mode' => 'issue')); ?>
             <?php endif; ?>
-            <div class="reportissue_additional_information_container">
+            <div class="reportissue_additional_information_container" style="display: none;">
                 <table cellpadding="0" cellspacing="0" id="edition_div" style="display: none;" class="additional_information<?php if (array_key_exists('edition', $errors)): ?> reportissue_error<?php endif; ?>">
                     <tr>
                         <td style="width: 180px;"><label for="edition_id" id="edition_label"><span>* </span><?php echo __('Edition'); ?></label></td>
@@ -563,7 +569,7 @@
                             <td style="width: 180px;"><label for="<?php echo $customdatatype->getKey(); ?>_id" id="<?php echo $customdatatype->getKey(); ?>_label"><span>* </span><?php echo __($customdatatype->getDescription()); ?></label></td>
                             <td class="report_issue_help faded_out dark"><?php echo __($customdatatype->getInstructions()); ?></td>
                         <tr>
-                            <td colspan="2" style="padding-top: 5px;">
+                            <td colspan="2" style="padding-top: 5px;" class="editor_container">
                                 <?php
                                     switch ($customdatatype->getType())
                                     {
@@ -633,7 +639,7 @@
                                         case \thebuggenie\core\entities\CustomDatatype::INPUT_TEXTAREA_SMALL:
                                         case \thebuggenie\core\entities\CustomDatatype::INPUT_TEXTAREA_MAIN:
                                             ?>
-                                            <?php include_component('main/textarea', array('area_name' => $customdatatype->getKey().'_value', 'target_type' => 'project', 'target_id' => $selected_project->getID(), 'area_id' => $customdatatype->getKey().'_value', 'height' => '75px', 'width' => '100%', 'syntax' => $tbg_user->getPreferredIssuesSyntax(true), 'value' => $selected_customdatatype[$customdatatype->getKey()])); ?>
+                                            <?php include_component('main/textarea', array('area_name' => $customdatatype->getKey().'_value', 'target_type' => 'project', 'target_id' => $selected_project->getID(), 'area_id' => $customdatatype->getKey().'_value', 'height' => '75px', 'width' => '100%', 'hide_hint' => true, 'syntax' => $tbg_user->getPreferredIssuesSyntax(true), 'value' => $selected_customdatatype[$customdatatype->getKey()])); ?>
                                             <?php
                                             break;
                                     }
@@ -646,21 +652,23 @@
             </div>
             <?php if ($selected_issuetype != null && $selected_project != null): ?>
                 <script type="text/javascript">
-                    document.observe('dom:loaded', function() {
-                        TBG.Issues.updateFields('<?php echo make_url('getreportissuefields', array('project_key' => $selected_project->getKey())); ?>');
+                    require(['domReady', 'thebuggenie/tbg'], function (domReady, TBG) {
+                        domReady(function () {
+                            TBG.Issues.updateFields('<?php echo make_url('getreportissuefields', array('project_key' => $selected_project->getKey())); ?>');
+                        });
                     });
                 </script>
             <?php endif; ?>
             <?php \thebuggenie\core\framework\Event::createNew('core', 'reportissue.prefile')->trigger(); ?>
-            <div class="rounded_box report_issue_submit_container report_issue_desc green borderless" style="clear: both; vertical-align: middle; margin-top: 10px; padding: 5px; height: 25px;">
-                <div style="float: left; padding-top: 3px;"><?php echo __('When you are satisfied, click the %file_issue button to file your issue', array('%file_issue' => '<strong>'.__('File issue').'</strong>')); ?></div>
+            <div class="rounded_box report_issue_submit_container report_issue_desc green borderless">
+                <div><?php echo __('When you are satisfied, click the %file_issue button to file your issue', array('%file_issue' => '<strong>'.__('File issue').'</strong>')); ?></div>
                 <input type="submit" class="button button-silver" value="<?php echo __('File issue'); ?>" id="report_issue_submit_button">
                 <?php echo image_tag('spinning_20.gif', array('id' => 'report_issue_indicator', 'style' => 'display: none;')); ?>
             </div>
             <div class="rounded_box report_issue_desc borderless lightgrey" id="report_issue_add_extra" style="vertical-align: middle; padding: 5px;">
                 <strong><?php echo __('Add more information to your issue'); ?></strong><br>
                 <p><?php echo __('Specify additional information by clicking the links below before submitting your issue'); ?></p>
-                <p id="reportissue_extrafields_none" style="display: none;"><?php echo __('No additional actions available'); ?></p>
+                <p id="reportissue_extrafields_none"><?php echo __('No additional actions available'); ?></p>
                 <ul id="reportissue_extrafields">
                     <li id="status_additional" style="display: none;">
                         <?php echo image_tag('icon_status.png'); ?>
@@ -752,7 +760,7 @@
                     </li>
                     <li id="spent_time_additional" style="display: none;">
                         <?php echo image_tag('icon_time.png'); ?>
-                        <div id="spent_time_link"<?php if ($selected_spent_time != ''): ?> style="display: none;"<?php endif; ?>><a href="javascript:void(0);" onclick="$('spent_time_link').hide();$('spent_time_additional_div').show();"><?php echo __('Estimate time to fix'); ?></a></div>
+                        <div id="spent_time_link"<?php if ($selected_spent_time != ''): ?> style="display: none;"<?php endif; ?>><a href="javascript:void(0);" onclick="$('spent_time_link').hide();$('spent_time_additional_div').show();"><?php echo __('Time spent on fix'); ?></a></div>
                         <div id="spent_time_additional_div"<?php if ($selected_spent_time === null): ?> style="display: none;"<?php endif; ?>>
                             <input name="spent_time" id="spent_time_id_additional" style="width: 100px;">
                             <a href="javascript:void(0);" class="img" onclick="$('spent_time_link').show();$('spent_time_additional_div').hide();$('spent_time_id_additional').setValue('');"><?php echo image_tag('undo.png', array('style' => 'float: none; margin-left: 5px;')); ?></a>
@@ -766,7 +774,7 @@
                             <a href="javascript:void(0);" class="img" onclick="$('percent_complete_link').show();$('percent_complete_additional_div').hide();$('percent_complete_id_additional').setValue('');"><?php echo image_tag('undo.png', array('style' => 'float: none; margin-left: 5px;')); ?></a>
                         </div>
                     </li>
-                    <li id="priority_additional">
+                    <li id="priority_additional" style="display: none;">
                         <?php echo image_tag('icon_priority.png'); ?>
                         <div id="priority_link"<?php if ($selected_priority instanceof \thebuggenie\core\entities\Priority): ?> style="display: none;"<?php endif; ?>><a href="javascript:void(0);" onclick="$('priority_link').hide();$('priority_additional_div').show();"><?php echo __('Set priority'); ?></a></div>
                         <div id="priority_additional_div"<?php if ($selected_priority === null): ?> style="display: none;"<?php endif; ?>>
@@ -822,7 +830,7 @@
                         <li id="<?php echo $customdatatype->getKey(); ?>_additional" style="display: none;">
                             <?php echo image_tag('icon_customdatatype.png'); ?>
                             <div id="<?php echo $customdatatype->getKey(); ?>_link"<?php if ($selected_customdatatype[$customdatatype->getKey()] !== null): ?> style="display: none;"<?php endif; ?>><a href="javascript:void(0);" onclick="$('<?php echo $customdatatype->getKey(); ?>_link').hide();$('<?php echo $customdatatype->getKey(); ?>_additional_div').show();"><?php echo __($customdatatype->getDescription()); ?></a></div>
-                            <div id="<?php echo $customdatatype->getKey(); ?>_additional_div"<?php if ($selected_customdatatype[$customdatatype->getKey()] === null): ?> style="display: none;"<?php endif; ?>>
+                            <div id="<?php echo $customdatatype->getKey(); ?>_additional_div"<?php if ($selected_customdatatype[$customdatatype->getKey()] === null): ?> style="display: none;"<?php endif; ?> class="editor_container">
                                 <?php
                                     switch ($customdatatype->getType())
                                     {
@@ -896,7 +904,7 @@
                                             ?>
                                             <label for="<?php echo $customdatatype->getKey(); ?>_value_additional"><?php echo $customdatatype->getDescription(); ?></label>
                                             <br>
-                                            <?php include_component('main/textarea', array('area_name' => $customdatatype->getKey().'_value', 'target_type' => 'project', 'target_id' => $selected_project->getID(), 'area_id' => $customdatatype->getKey().'_value_additional', 'height' => '125px', 'width' => '100%', 'value' => $selected_customdatatype[$customdatatype->getKey()])); ?>
+                                            <?php include_component('main/textarea', array('area_name' => $customdatatype->getKey().'_value', 'target_type' => 'project', 'target_id' => $selected_project->getID(), 'area_id' => $customdatatype->getKey().'_value_additional', 'height' => '125px', 'hide_hint' => true, 'width' => '100%', 'value' => $selected_customdatatype[$customdatatype->getKey()])); ?>
                                             <?php
                                             break;
                                     }

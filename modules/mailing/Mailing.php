@@ -2,6 +2,7 @@
 
     namespace thebuggenie\modules\mailing;
 
+    use thebuggenie\core\entities\tables\Settings;
     use thebuggenie\modules\publish\entities\Article,
         thebuggenie\modules\mailing\entities\IncomingEmailAccount,
         thebuggenie\modules\mailing\entities\tables\MailQueueTable,
@@ -17,8 +18,7 @@
         thebuggenie\core\entities\Issue,
         thebuggenie\core\entities\Project,
         thebuggenie\core\entities\Status,
-        thebuggenie\core\entities\Resolution,
-        thebuggenie\core\entities\tables\Settings as SettingsTable;
+        thebuggenie\core\entities\Resolution;
 
     /**
      * @Table(name="\thebuggenie\core\entities\tables\Modules")
@@ -26,7 +26,7 @@
     class Mailing extends \thebuggenie\core\entities\Module
     {
 
-        const VERSION = '2.0';
+        const VERSION = '2.0.1';
         const MAIL_TYPE_PHP = 1;
         const MAIL_TYPE_SMTP = 2;
         const MAIL_TYPE_SENDMAIL = 3;
@@ -60,12 +60,18 @@
          * Notify the user when he updates an issue
          */
         const NOTIFY_UPDATED_SELF = 'notify_updated_self';
+
+        /**
+         * Notify the user when he is mentioned
+         */
+        const NOTIFY_MENTIONED = 'notify_mentioned';
         const MAIL_ENCODING_BASE64 = 3;
         const MAIL_ENCODING_QUOTED = 4;
         const MAIL_ENCODING_UTF7 = 0;
         const SETTING_PROJECT_FROM_ADDRESS = 'project_from_address_';
         const SETTING_PROJECT_FROM_NAME = 'project_from_name_';
 
+        protected $_name = 'mailing';
         protected $_longname = 'Email communication';
         protected $_description = 'Enables in- and outgoing email functionality';
         protected $_module_config_title = 'Email communication';
@@ -97,16 +103,17 @@
 
         protected function _addListeners()
         {
-            framework\Event::listen('core', '\thebuggenie\core\entities\User::_postSave', array($this, 'listen_registerUser'));
+            framework\Event::listen('core', 'thebuggenie\core\entities\User::_postSave', array($this, 'listen_registerUser'));
             framework\Event::listen('core', 'password_reset', array($this, 'listen_forgottenPassword'));
             framework\Event::listen('core', 'login_form_pane', array($this, 'listen_loginPane'));
             framework\Event::listen('core', 'login_button_container', array($this, 'listen_loginButtonContainer'));
-            framework\Event::listen('core', '\thebuggenie\core\entities\User::addScope', array($this, 'listen_addScope'));
-            framework\Event::listen('core', '\thebuggenie\core\entities\Issue::createNew', array($this, 'listen_issueCreate'));
-            framework\Event::listen('core', '\thebuggenie\core\entities\User::_postSave', array($this, 'listen_createUser'));
-            framework\Event::listen('core', '\thebuggenie\core\entities\Issue::save', array($this, 'listen_issueSave'));
-            framework\Event::listen('core', '\thebuggenie\core\entities\Comment::createNew', array($this, 'listen_thebuggenie_core_entities_Comment_createNew'));
-            framework\Event::listen('core', '\thebuggenie\modules\publish\entities\Article::doSave', array($this, 'listen_Article_doSave'));
+            framework\Event::listen('core', 'thebuggenie\core\entities\User::addScope', array($this, 'listen_addScope'));
+            framework\Event::listen('core', 'thebuggenie\core\entities\Issue::createNew', array($this, 'listen_issueCreate'));
+            framework\Event::listen('core', 'thebuggenie\core\entities\User::_postSave', array($this, 'listen_createUser'));
+            framework\Event::listen('core', 'thebuggenie\core\entities\Issue::save', array($this, 'listen_issueSave'));
+            framework\Event::listen('core', 'thebuggenie\core\entities\Comment::createNew', array($this, 'listen_thebuggenie_core_entities_Comment_createNew'));
+            framework\Event::listen('core', 'thebuggenie\core\entities\Comment::_postSave', array($this, 'listen_thebuggenie_core_entities_Comment_createNew'));
+            framework\Event::listen('core', 'thebuggenie\modules\publish\entities\Article::doSave', array($this, 'listen_Article_doSave'));
             framework\Event::listen('core', 'viewissue', array($this, 'listen_viewissue'));
             framework\Event::listen('core', 'issue_subscribe_user', array($this, 'listen_issueSubscribeUser'));
             framework\Event::listen('core', 'user_dropdown_anon', array($this, 'listen_userDropdownAnon'));
@@ -253,7 +260,9 @@ EOT;
         /**
          * Gets a configured Swift_Message object
          *
-         * @param Swift_Message $subject
+         * @param string $subject
+         * @param string $message_plain
+         * @param string $message_html
          */
         public function getSwiftMessage($subject, $message_plain, $message_html)
         {
@@ -274,7 +283,7 @@ EOT;
                 if (is_numeric($user))
                     $user = \thebuggenie\core\entities\User::getB2DBTable()->selectById($user);
 
-                if ($user instanceof User)
+                if ($user instanceof User && $user->getEmail() != '')
                 {
                     $user_language = $user->getLanguage();
                     if (!array_key_exists($user_language, $langs))
@@ -301,13 +310,14 @@ EOT;
                 $current_language = framework\Context::getI18n()->getCurrentLanguage();
                 try
                 {
-                    framework\Context::getI18n()->setLanguage($language);
+                    $i18n = framework\Context::getI18n();
+                    $i18n->setLanguage($language);
                     $body_parts = $this->getEmailTemplates($template, $parameters);
-                    $translated_subject = framework\Context::getI18n()->__($subject, $subject_parameters);
-                    $message = $this->getSwiftMessage($translated_subject, $body_parts[0], $body_parts[1]);
+                    $translated_subject = $i18n->__($subject, $subject_parameters);
+                    $message = $this->getSwiftMessage(html_entity_decode($translated_subject, ENT_NOQUOTES, $i18n->getCharset()), $body_parts[0], $body_parts[1]);
                     foreach ($users as $user)
                     {
-                        $message->addTo($user->getEmail(), $user->getBuddyname());
+                        $message->addTo($user->getEmail(), $user->getName());
                     }
                     $messages[] = $message;
                     framework\Context::getI18n()->setLanguage($current_language);
@@ -421,34 +431,58 @@ EOT;
             }
         }
 
-        protected function _getArticleRelatedUsers(Article $article, User $triggered_by_user)
+        protected function _getArticleRelatedUsers(Article $article, User $triggered_by_user = null)
         {
             $u_id = ($triggered_by_user instanceof User) ? $triggered_by_user->getID() : $triggered_by_user;
-            $users = $article->getSubscribers();
-            foreach ($users as $key => $user)
+            $subscribers = $article->getSubscribers();
+            $users = array();
+            foreach ($subscribers as $user)
             {
                 if ($user->getNotificationSetting(self::NOTIFY_SUBSCRIBED_ARTICLES, true, 'mailing')->isOff())
-                    unset($users[$key]);
+                    unset($users[$user->getID()]);
                 if ($user->getNotificationSetting(self::NOTIFY_UPDATED_SELF, true, 'mailing')->isOff() && $user->getID() == $u_id)
-                    unset($users[$key]);
+                    unset($users[$user->getID()]);
                 if ($user->getNotificationSetting(self::NOTIFY_ITEM_ONCE, false, 'mailing')->isOn() && $user->getNotificationSetting(self::NOTIFY_ITEM_ONCE . '_article_' . $article->getID(), false, 'mailing')->isOn())
-                    unset($users[$key]);
+                    unset($users[$user->getID()]);
+            }
+            $mentioned_users = $article->getMentionedUsers();
+            foreach ($mentioned_users as $user)
+            {
+                $users[$user->getID()] = $user;
+
+                if ($user->getNotificationSetting(self::NOTIFY_MENTIONED, true, 'mailing')->isOff())
+                    unset($users[$user->getID()]);
+                if ($user->getNotificationSetting(self::NOTIFY_ITEM_ONCE, false, 'mailing')->isOn() && $user->getNotificationSetting(self::NOTIFY_ITEM_ONCE . '_article_' . $article->getID(), false, 'mailing')->isOn())
+                    unset($users[$user->getID()]);
             }
             return $users;
         }
 
-        protected function _getIssueRelatedUsers(Issue $issue, $postedby)
+        protected function _getIssueRelatedUsers(Issue $issue, $postedby = null)
         {
             $u_id = ($postedby instanceof User) ? $postedby->getID() : $postedby;
-            $users = $issue->getSubscribers();
-            foreach ($users as $key => $user)
+            $subscribers = $issue->getSubscribers();
+            $users = array();
+            foreach ($subscribers as $user)
             {
+                $users[$user->getID()] = $user;
+
                 if ($user->getNotificationSetting(self::NOTIFY_SUBSCRIBED_ISSUES, true, 'mailing')->isOff())
-                    unset($users[$key]);
+                    unset($users[$user->getID()]);
                 if ($user->getNotificationSetting(self::NOTIFY_UPDATED_SELF, true, 'mailing')->isOff() && $user->getID() == $u_id)
-                    unset($users[$key]);
+                    unset($users[$user->getID()]);
                 if ($user->getNotificationSetting(self::NOTIFY_ITEM_ONCE, false, 'mailing')->isOn() && $user->getNotificationSetting(self::NOTIFY_ITEM_ONCE . '_issue_' . $issue->getID(), false, 'mailing')->isOn())
-                    unset($users[$key]);
+                    unset($users[$user->getID()]);
+            }
+            $mentioned_users = $issue->getMentionedUsers();
+            foreach ($mentioned_users as $user)
+            {
+                $users[$user->getID()] = $user;
+
+                if ($user->getNotificationSetting(self::NOTIFY_MENTIONED, true, 'mailing')->isOff())
+                    unset($users[$user->getID()]);
+                if ($user->getNotificationSetting(self::NOTIFY_ITEM_ONCE, false, 'mailing')->isOn() && $user->getNotificationSetting(self::NOTIFY_ITEM_ONCE . '_issue_' . $issue->getID(), false, 'mailing')->isOn())
+                    unset($users[$user->getID()]);
             }
             return $users;
         }
@@ -457,8 +491,8 @@ EOT;
         {
             if ($project instanceof Project)
             {
-                $address = SettingsTable::get(self::SETTING_PROJECT_FROM_ADDRESS . $project->getID(), 'mailing');
-                $name = SettingsTable::get(self::SETTING_PROJECT_FROM_NAME . $project->getID(), 'mailing');
+                $address = $this->getSetting(self::SETTING_PROJECT_FROM_ADDRESS . $project->getID());
+                $name = $this->getSetting(self::SETTING_PROJECT_FROM_NAME . $project->getID());
                 if ($address != '')
                 {
                     $message->setFrom($address, $name);
@@ -478,9 +512,10 @@ EOT;
                     $to_users = $issue->getRelatedUsers();
                     if (!$this->getSetting(self::NOTIFY_UPDATED_SELF, framework\Context::getUser()->getID()))
                         unset($to_users[framework\Context::getUser()->getID()]);
+
                     foreach ($to_users as $uid => $user)
                     {
-                        if ($user->getNotificationSetting(self::NOTIFY_NEW_ISSUES_MY_PROJECTS, true, 'mailing')->isOff())
+                        if ($user->getNotificationSetting(self::NOTIFY_NEW_ISSUES_MY_PROJECTS, true, 'mailing')->isOff() || !$issue->hasAccess($user))
                             unset($to_users[$uid]);
                     }
                     $messages = $this->getTranslatedMessages('issuecreate', $parameters, $to_users, $subject);
@@ -605,6 +640,14 @@ EOT;
                     $subject = 'Re: [' . $issue->getProject()->getKey() . '] ' . $issue->getIssueType()->getName() . ' ' . $issue->getFormattedIssueNo(true) . ' - ' . html_entity_decode($issue->getTitle(), ENT_COMPAT, framework\Context::getI18n()->getCharset());
                     $parameters = array('issue' => $issue, 'comment' => $event->getParameter('comment'), 'log_items' => $event->getParameter('log_items'), 'updated_by' => $event->getParameter('updated_by'));
                     $to_users = $this->_getIssueRelatedUsers($issue, $parameters['updated_by']);
+                    if (!$this->getSetting(self::NOTIFY_UPDATED_SELF, framework\Context::getUser()->getID()))
+                        unset($to_users[framework\Context::getUser()->getID()]);
+
+                    foreach ($to_users as $uid => $user)
+                    {
+                        if (!$issue->hasAccess($user))
+                            unset($to_users[$uid]);
+                    }
                     $this->_markIssueSent($issue, $to_users);
                     $messages = $this->getTranslatedMessages('issueupdate', $parameters, $to_users, $subject);
 
@@ -682,6 +725,7 @@ EOT;
             $notificationsettings[self::NOTIFY_NEW_ARTICLES_MY_PROJECTS] = $i18n->__('Notify by email when new articles are created in my project(s)');
             $notificationsettings[self::NOTIFY_ITEM_ONCE] = $i18n->__('Only send one email per issue or article until I view the issue or article in my browser');
             $notificationsettings[self::NOTIFY_UPDATED_SELF] = $i18n->__('Notify by email also when I am the one making the changes');
+            $notificationsettings[self::NOTIFY_MENTIONED] = $i18n->__('Notify by email when I am mentioned in issue or article or their comment');
             return $notificationsettings;
         }
 
@@ -828,6 +872,7 @@ EOT;
         {
             if ($this->mailer === null)
             {
+                require_once THEBUGGENIE_VENDOR_PATH . DS . 'swiftmailer' . DS . 'swiftmailer' . DS . 'lib' . DS . 'swift_required.php';
                 switch ($this->getMailerType()) {
                     case self::MAIL_TYPE_SENDMAIL:
                         $command = $this->getSendmailCommand();
@@ -857,7 +902,6 @@ EOT;
 
         public function mail(Swift_Message $message)
         {
-            require_once THEBUGGENIE_VENDOR_PATH . DS . 'swiftmailer' . DS . 'swiftmailer' . DS . 'lib' . DS . 'swift_required.php';
             $mailer = $this->getMailer();
             return $mailer->send($message);
         }
@@ -868,7 +912,7 @@ EOT;
             {
                 if ($this->usesEmailQueue())
                 {
-                    tables\MailQueueTable::getTable()->addMailToQueue($email);
+                    MailQueueTable::getTable()->addMailToQueue($email);
                     return true;
                 }
                 else
@@ -906,7 +950,7 @@ EOT;
             {
                 case '1.0':
                     IncomingEmailAccount::getB2DBTable()->upgrade(\thebuggenie\modules\mailing\upgrade_32\TBGIncomingEmailAccountTable::getTable());
-                    SettingsTable::getTable()->deleteAllUserModuleSettings('mailing');
+                    Settings::getTable()->deleteAllUserModuleSettings('mailing');
                     break;
             }
         }
@@ -1053,7 +1097,7 @@ EOT;
         public function getOrCreateUserFromEmailString($email_string)
         {
             $email = $this->getEmailAdressFromSenderString($email_string);
-            if (!$user = User::findUser($email))
+            if (!$user = User::findUser($email, true))
             {
                 $name = $email;
 
@@ -1212,7 +1256,7 @@ EOT;
                                 foreach ($message->getAttachments() as $attachment_no => $attachment)
                                 {
                                     echo 'saving attachment ' . $attachment_no;
-                                    $name = $attachment['filename'];
+                                    $name = iconv_mime_decode($attachment['filename'], ICONV_MIME_DECODE_CONTINUE_ON_ERROR, 'UTF-8');
                                     $new_filename = framework\Context::getUser()->getID() . '_' . NOW . '_' . basename($name);
                                     if (framework\Settings::getUploadStorage() == 'files')
                                     {

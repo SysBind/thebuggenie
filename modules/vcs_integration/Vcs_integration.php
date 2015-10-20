@@ -2,6 +2,8 @@
 
     namespace thebuggenie\modules\vcs_integration;
 
+    use b2db\Criteria;
+    use thebuggenie\core\entities\tables\Settings;
     use thebuggenie\core\framework,
         thebuggenie\modules\vcs_integration\entities\File,
         thebuggenie\modules\vcs_integration\entities\tables\Files,
@@ -31,7 +33,7 @@
     class Vcs_integration extends \thebuggenie\core\entities\Module
     {
 
-        const VERSION = '2.0';
+        const VERSION = '2.0.1';
 
         const MODE_DISABLED = 0;
         const MODE_ISSUECOMMITS = 1;
@@ -41,6 +43,7 @@
         const ACCESS_HTTP = 1;
         const NOTIFICATION_COMMIT_MENTIONED = 'commit_mentioned';
 
+        protected $_name = 'vcs_integration';
         protected $_longname = 'VCS Integration';
         protected $_description = 'Allows details from source code checkins to be displayed in The Bug Genie. Configure in each project\'s settings.';
         protected $_module_config_title = 'VCS Integration';
@@ -52,6 +55,30 @@
 
         }
 
+        protected function _upgrade()
+        {
+            switch ($this->_version) {
+                case '2.0':
+                    $table = Settings::getTable();
+                    $crit = $table->getCriteria();
+                    $ctn = $crit->returnCriterion(Settings::NAME, 'diff_url_%', Criteria::DB_LIKE);
+                    $ctn->addOr(Settings::NAME, 'log_url_%', Criteria::DB_LIKE);
+                    $ctn->addOr(Settings::NAME, 'blob_url_%', Criteria::DB_LIKE);
+                    $ctn->addOr(Settings::NAME, 'commit_url_%', Criteria::DB_LIKE);
+                    $crit->addWhere($ctn);
+                    $crit->addWhere(Settings::MODULE, 'vcs_integration');
+                    $urls = $table->doSelect($crit);
+                    if ($urls) {
+                        while ($url = $urls->getNextRow()) {
+                            $value = str_replace(array('%revno%', '%oldrev%', '%file%'), array('%revno', '%oldrev', '%file'), $url[Settings::VALUE]);
+                            $crit = $table->getCriteria();
+                            $crit->addUpdate(Settings::VALUE, $value);
+                            $table->doUpdateById($crit, $url[Settings::ID]);
+                        }
+                    }
+            }
+        }
+
         protected function _install($scope)
         {
 
@@ -59,9 +86,11 @@
 
         protected function _loadFixtures($scope)
         {
-            Commits::getTable()->createIndexes();
-            Files::getTable()->createIndexes();
-            IssueLinks::getTable()->createIndexes();
+            if ($scope == framework\Settings::getDefaultScopeID()) {
+                Commits::getTable()->createIndexes();
+                Files::getTable()->createIndexes();
+                IssueLinks::getTable()->createIndexes();
+            }
         }
 
         protected function _addListeners()
@@ -74,7 +103,9 @@
             framework\Event::listen('core', 'config_project_panes', array($this, 'listen_projectconfig_panel'));
             framework\Event::listen('core', 'project_header_buttons', array($this, 'listen_projectheader'));
             framework\Event::listen('core', '_notification_view', array($this, 'listen_notificationview'));
-            framework\Event::listen('core', '\thebuggenie\core\entities\Notification::getTarget', array($this, 'listen_thebuggenie_core_entities_Notification_getTarget'));
+            framework\Event::listen('core', 'thebuggenie\core\entities\Notification::getTarget', array($this, 'listen_thebuggenie_core_entities_Notification_getTarget'));
+            framework\Event::listen('core', 'thebuggenie\core\framework\helpers\TextParser::_parse_line::char_regexes', array($this, 'listen_thebuggenie_core_helpers_textparser_char_regexes'));
+            framework\Event::listen('core', 'thebuggenie\core\framework\helpers\TextParserMarkdown::transform', array($this, 'listen_thebuggenie_core_helpers_textparser_char_regexes'));
         }
 
         protected function _uninstall()
@@ -91,6 +122,30 @@
         public function hasProjectAwareRoute()
         {
             return false;
+        }
+
+        public function listen_thebuggenie_core_helpers_textparser_char_regexes(framework\Event $event)
+        {
+            $event->addToReturnList(array(array('/([a-f0-9]{40})/'), array($this, '_parse_commit')));
+        }
+
+        protected function _getCommitLink($commit)
+        {
+            return '<a href="javascript:void(0)" onclick="TBG.Main.Helpers.Backdrop.show(\''.make_url('get_partial_for_backdrop', array('key' => 'vcs_integration_getcommit', 'commit_id' => $commit->getID())).'\');">'.$commit->getRevisionString().'</a>';
+        }
+
+        public function _parse_commit($matches)
+        {
+            if (!framework\Context::isProjectContext())
+                return $matches[0];
+
+            /* <a href="javascript:void(0)" onclick="TBG.Main.Helpers.Backdrop.show('<?php echo make_url('get_partial_for_backdrop', array('key' => 'vcs_integration_getcommit', 'commit_id' => $commit->getID())); ?>');"><?php echo $commit->getRevisionString(); ?></a> */
+            $commit = Commits::getTable()->getCommitByCommitId($matches[0], framework\Context::getCurrentProject()->getID());
+
+            if (!$commit instanceof Commit)
+                return $matches[0];
+
+            return $this->_getCommitLink($commit);
         }
 
         public function listen_sidebar_links(framework\Event $event)
@@ -164,13 +219,16 @@
             include_component('vcs_integration/viewissue_commits', array('links' => $links, 'projectId' => $event->getSubject()->getProject()->getID()));
         }
 
-        public static function processCommit(\thebuggenie\core\entities\Project $project, $commit_msg, $old_rev, $new_rev, $date = null, $changed, $author, $branch = null)
+        public static function processCommit(\thebuggenie\core\entities\Project $project, $commit_msg, $old_rev, $new_rev, $date = null, $changed, $author, $branch = null, \Closure $callback = null)
         {
             $output = '';
             framework\Context::setCurrentProject($project);
 
-            if ($project->isArchived()): return;
-            endif;
+            if ($project->isArchived())
+                return;
+
+            if (Commits::getTable()->isProjectCommitProcessed($new_rev, $project->getID()))
+                return;
 
             try
             {
@@ -219,11 +277,14 @@
              * e) and if we STILL havent found one, we use the guest user
              */
 
-            if (preg_match("/(?<=<)(.*)(?=>)/", $author, $matches))
+            // a)
+            $user = \thebuggenie\core\entities\tables\Users::getTable()->getByEmail($author);
+
+            if (!$user instanceof \thebuggenie\core\entities\User && preg_match("/(?<=<)(.*)(?=>)/", $author, $matches))
             {
                 $email = $matches[0];
 
-                // a)
+                // a2)
                 $user = \thebuggenie\core\entities\tables\Users::getTable()->getByEmail($email);
 
                 if (!$user instanceof \thebuggenie\core\entities\User)
@@ -274,6 +335,8 @@
                 $data = 'branch:' . $branch;
                 $commit->setMiscData($data);
             }
+
+            if ($callback !== null) $commit = $callback($commit);
 
             $commit->save();
 
@@ -332,7 +395,7 @@
                                     }
 
                                     // Run the transition.
-                                    $possible_transition->transitionIssueToOutgoingStepWithoutRequest($issue);
+                                    $possible_transition->transitionIssueToOutgoingStepFromRequest($issue, framework\Context::getRequest());
 
                                     // Log an informative message about the transition.
                                     $output .= '[VCS ' . $project->getKey() . '] Ran transition ' . $possible_transition->getName() . ' with parameters \'' . $parameters_string . '\' on issue ' . $issue->getFormattedIssueNo() . "\n";

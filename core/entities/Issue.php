@@ -140,6 +140,8 @@
          */
         protected $_description_syntax;
 
+        protected $_description_parser = null;
+
         /**
          * This issues reproduction steps
          *
@@ -155,6 +157,8 @@
          * @Column(type="integer", length=2, default=1)
          */
         protected $_reproduction_steps_syntax;
+
+        protected $_reproduction_steps_parser = null;
 
         /**
          * When the issue was posted
@@ -660,12 +664,7 @@
         {
             $project = framework\Context::getCurrentProject();
             $found_issue = null;
-            $issue_no = mb_strtolower(trim($issue_number));
-            if (mb_strpos($issue_no, ' ') !== false)
-            {
-                $issue_no = mb_substr($issue_no, strrpos($issue_no, ' ') + 1);
-            }
-            if (mb_substr($issue_no, 0, 1) == '#') $issue_no = mb_substr($issue_no, 1);
+            $issue_no = self::extractIssueNoFromNumber($issue_number);
             if (is_numeric($issue_no))
             {
                 try
@@ -693,7 +692,26 @@
             return ($found_issue instanceof \thebuggenie\core\entities\Issue) ? $found_issue : null;
         }
 
-        public static function findIssues($filters = array(), $results_per_page = 30, $offset = 0, $groupby = null, $grouporder = null, $sortfields = array(tables\Issues::LAST_UPDATED => 'asc'))
+        /**
+         * Extract issue no from issue integer or string with prefix '#'.
+         *
+         * @param string $issue_number An integer or issue number
+         *
+         * @return string
+         */
+        public static function extractIssueNoFromNumber($issue_number)
+        {
+            $issue_no = mb_strtolower(trim($issue_number));
+            if (mb_strpos($issue_no, ' ') !== false)
+            {
+                $issue_no = mb_substr($issue_no, strrpos($issue_no, ' ') + 1);
+            }
+            if (mb_substr($issue_no, 0, 1) == '#') $issue_no = mb_substr($issue_no, 1);
+
+            return $issue_no;
+        }
+
+        public static function findIssues($filters = array(), $results_per_page = 30, $offset = 0, $groupby = null, $grouporder = null, $sortfields = array(tables\Issues::LAST_UPDATED => 'desc'))
         {
             $issues = array();
             list ($rows, $count, $ids) = tables\Issues::getTable()->findIssues($filters, $results_per_page, $offset, $groupby, $grouporder, $sortfields);
@@ -748,10 +766,10 @@
             if ($issue instanceof \thebuggenie\core\entities\Issue)
                 return array(array($issue), 1);
 
-            $filters = array('text' => array('value' => $text, 'operator' => '='));
+            $filters = array('text' => SearchFilter::createFilter('text', array('v' => $text, 'o' => '=')));
             if ($project instanceof \thebuggenie\core\entities\Project)
             {
-                $filters['project_id'] = array('value' => $project->getID(), 'operator' => '=');
+                $filters['project_id'] = SearchFilter::createFilter('project_id', array('v' => $project->getID(), 'o' => '='));
             }
             return self::findIssues($filters);
         }
@@ -797,7 +815,7 @@
          */
         public static function getIssuesFromTextByRegex($text)
         {
-            $issue_match_regexes = TextParser::getIssueRegex();
+            $issue_match_regexes = \thebuggenie\core\helpers\TextParser::getIssueRegex();
             $issue_numbers = array(); // Issue numbers
             $issues = array(); // Issue objects
             $transitions = array(); // Transition information
@@ -808,61 +826,70 @@
             {
                 $matched_issue_data = array(); // All data from regexp
 
-                // If any match is found using the current regular expression, extract
-                // the information.
-                if (preg_match_all($issue_match_regex, $text, $matched_issue_data))
+                $lines = explode("\n", $text);
+                foreach ($lines as $line)
                 {
-
-                    // Identified issues are kept inside of named regex group.
-                    foreach ($matched_issue_data["issues"] as $key => $issue_number)
+                    if (mb_substr($line, -1) == "\r")
                     {
-                        // Get the matched transitions for the issue.
-                        $matched_issue_transitions = $matched_issue_data["transitions"][$key];
-
-                        // Create an empty array to store transitions for an issue. Don't
-                        // overwrite it. Use issue number as key for transitions.
-                        if (!array_key_exists($issue_number, $transitions))
-                        {
-                            $transitions[$issue_number] = array();
-                        }
-
-                        // Add the transition information (if any) for an issue.
-                        if ($matched_issue_transitions )
-                        {
-                            // Parse the transition information. Each transition string is in
-                            // format:
-                            // 'TRANSITION1: PARAM1_1=VALUE1_1 PARAM1_2=VALUE1_2; TRANSITION2: PARAM2_1=VALUE2_1 PARAM2_2=VALUE2_2'
-                            foreach (explode("; ", $matched_issue_transitions) as $transition)
-                            {
-                                // Split command from its parameters.
-                                $transition_data = explode(": ", $transition);
-                                $transition_command = $transition_data[0];
-                                // Set-up array that will contain parameters
-                                $transition_parameters = array();
-
-                                // Process parameters if they were present.
-                                if (count($transition_data) == 2)
-                                {
-                                    // Split into induvidual parameters.
-                                    foreach (explode(" ", $transition_data[1]) as $parameter)
-                                    {
-                                        // Only process proper parameters (of format 'PARAM=VALUE')
-                                        if (mb_strpos($parameter, '='))
-                                        {
-                                            list($param_key, $param_value) = explode('=', $parameter);
-                                            $transition_parameters[$param_key] = $param_value;
-                                        }
-                                    }
-                                }
-                                // Append the transition information for the current issue number.
-                                $transitions[$issue_number][] = array($transition_command, $transition_parameters);
-                            }
-                        }
-
-                        // Add the issue number to the list.
-                        $issue_numbers[] = $issue_number;
+                        $line = mb_substr($line, 0, -1);
                     }
 
+                    // If any match is found using the current regular expression, extract
+                    // the information.
+                    if (preg_match_all($issue_match_regex, $line, $matched_issue_data))
+                    {
+
+                        // Identified issues are kept inside of named regex group.
+                        foreach ($matched_issue_data["issues"] as $key => $issue_number)
+                        {
+                            // Get the matched transitions for the issue.
+                            $matched_issue_transitions = $matched_issue_data["transitions"][$key];
+
+                            // Create an empty array to store transitions for an issue. Don't
+                            // overwrite it. Use issue number as key for transitions.
+                            if (!array_key_exists($issue_number, $transitions))
+                            {
+                                $transitions[$issue_number] = array();
+                            }
+
+                            // Add the transition information (if any) for an issue.
+                            if ($matched_issue_transitions )
+                            {
+                                // Parse the transition information. Each transition string is in
+                                // format:
+                                // 'TRANSITION1: PARAM1_1=VALUE1_1 PARAM1_2=VALUE1_2; TRANSITION2: PARAM2_1=VALUE2_1 PARAM2_2=VALUE2_2'
+                                foreach (explode("; ", $matched_issue_transitions) as $transition)
+                                {
+                                    // Split command from its parameters.
+                                    $transition_data = explode(": ", $transition);
+                                    $transition_command = $transition_data[0];
+                                    // Set-up array that will contain parameters
+                                    $transition_parameters = array();
+
+                                    // Process parameters if they were present.
+                                    if (count($transition_data) == 2)
+                                    {
+                                        // Split into induvidual parameters.
+                                        foreach (explode(" ", $transition_data[1]) as $parameter)
+                                        {
+                                            // Only process proper parameters (of format 'PARAM=VALUE')
+                                            if (mb_strpos($parameter, '='))
+                                            {
+                                                list($param_key, $param_value) = explode('=', $parameter);
+                                                $transition_parameters[$param_key] = $param_value;
+                                            }
+                                        }
+                                    }
+                                    // Append the transition information for the current issue number.
+                                    $transitions[$issue_number][] = array($transition_command, $transition_parameters);
+                                }
+                            }
+
+                            // Add the issue number to the list.
+                            $issue_numbers[] = $issue_number;
+                        }
+
+                    }
                 }
             }
 
@@ -923,11 +950,11 @@
          *
          * @return boolean
          */
-        public function hasAccess()
+        public function hasAccess($target_user = null)
         {
             \thebuggenie\core\framework\Logging::log('checking access to issue ' . $this->getFormattedIssueNo());
             $i_id = $this->getID();
-            $user = framework\Context::getUser();
+            $user = ($target_user === null) ? framework\Context::getUser() : $target_user;
             if (!$user->isGuest() && $user->isAuthenticated())
             {
                 $specific_access = $user->hasPermission("canviewissue", $i_id, 'core');
@@ -1051,14 +1078,37 @@
         {
             $status_ids = array();
             $transitions = array();
+            $available_statuses = Status::getAll();
+            $rule_status_valid = false;
 
             foreach ($this->getAvailableWorkflowTransitions() as $transition)
             {
-                $status_ids[] = $transition->getOutgoingStep()->getLinkedStatusID();
-                $transitions[$transition->getOutgoingStep()->getLinkedStatusID()] = $transition;
+                if ($transition->getOutgoingStep()->hasLinkedStatus())
+                {
+                    $status_ids[] = $transition->getOutgoingStep()->getLinkedStatusID();
+
+                    if (! isset($transitions[$transition->getOutgoingStep()->getLinkedStatusID()]))
+                        $transitions[$transition->getOutgoingStep()->getLinkedStatusID()] = array();
+
+                    $transitions[$transition->getOutgoingStep()->getLinkedStatusID()][] = $transition;
+                }
+                elseif ($transition->hasPostValidationRule(WorkflowTransitionValidationRule::RULE_STATUS_VALID))
+                {
+                    $values = explode(',', $transition->getPostValidationRule(WorkflowTransitionValidationRule::RULE_STATUS_VALID)->getRuleValue());
+
+                    foreach ($values as $value)
+                    {
+                        if (! array_key_exists($value, $available_statuses)) continue;
+                        if (! $rule_status_valid) $rule_status_valid = true;
+                        if (! isset($transitions[$value])) $transitions[$value] = array();
+
+                        $transitions[$value][] = $transition;
+                        $status_ids[] = $value;
+                    }
+                }
             }
 
-            return array($status_ids, $transitions);
+            return array($status_ids, $transitions, $rule_status_valid);
         }
 
         /**
@@ -1106,24 +1156,27 @@
             {
                 foreach ($rows as $row)
                 {
-                    $datatype = new CustomDatatype($row->get(tables\IssueCustomFields::CUSTOMFIELDS_ID));
-                    $var_name = "_customfield".$datatype->getKey();
+                    $datatype = CustomDatatype::getB2DBTable()->selectById($row->get(tables\IssueCustomFields::CUSTOMFIELDS_ID));
+                    if ($datatype instanceof CustomDatatype)
+                    {
+                        $var_name = "_customfield".$datatype->getKey();
 
-                    if ($datatype->hasCustomOptions())
-                    {
-                        $option = tables\CustomFieldOptions::getTable()->selectById((int) $row->get(tables\IssueCustomFields::CUSTOMFIELDOPTION_ID));
-                        if ($option instanceof \thebuggenie\core\entities\CustomDatatypeOption)
+                        if ($datatype->hasCustomOptions())
                         {
-                            $this->$var_name = $option;
+                            $option = tables\CustomFieldOptions::getTable()->selectById((int) $row->get(tables\IssueCustomFields::CUSTOMFIELDOPTION_ID));
+                            if ($option instanceof \thebuggenie\core\entities\CustomDatatypeOption)
+                            {
+                                $this->$var_name = $option;
+                            }
                         }
-                    }
-                    else if($datatype->hasPredefinedOptions())
-                    {
-                        $this->$var_name = $row->get(tables\IssueCustomFields::CUSTOMFIELDOPTION_ID);
-                    }
-                    else
-                    {
-                        $this->$var_name = $row->get(tables\IssueCustomFields::OPTION_VALUE);
+                        else if($datatype->hasPredefinedOptions())
+                        {
+                            $this->$var_name = $row->get(tables\IssueCustomFields::CUSTOMFIELDOPTION_ID);
+                        }
+                        else
+                        {
+                            $this->$var_name = $row->get(tables\IssueCustomFields::OPTION_VALUE);
+                        }
                     }
                 }
             }
@@ -1146,12 +1199,15 @@
                     {
                         try
                         {
-                            $status_id = $row->get(tables\IssueAffectsEdition::STATUS);
-                            $this->_editions[$row->get(tables\IssueAffectsEdition::ID)] = array(
-                                                        'edition' => tables\Editions::getTable()->selectById((int) $row->get(tables\IssueAffectsEdition::EDITION), null, null),
-                                                        'status' => ($status_id) ? Status::getB2DBTable()->selectById((int) $status_id) : null,
-                                                        'confirmed' => (bool) $row->get(tables\IssueAffectsEdition::CONFIRMED),
-                                                        'a_id' => $row->get(tables\IssueAffectsEdition::ID));
+                            $edition = tables\Editions::getTable()->selectById((int) $row->get(tables\IssueAffectsEdition::EDITION), null, null);
+                            if ($edition instanceof Edition) {
+                                $status_id = $row->get(tables\IssueAffectsEdition::STATUS);
+                                $this->_editions[$row->get(tables\IssueAffectsEdition::ID)] = array(
+                                    'edition' => $edition,
+                                    'status' => ($status_id) ? Status::getB2DBTable()->selectById((int) $status_id) : null,
+                                    'confirmed' => (bool) $row->get(tables\IssueAffectsEdition::CONFIRMED),
+                                    'a_id' => $row->get(tables\IssueAffectsEdition::ID));
+                            }
                         }
                         catch (\Exception $e) {}
                     }
@@ -1163,12 +1219,15 @@
                     {
                         try
                         {
-                            $status_id = $row->get(tables\IssueAffectsBuild::STATUS);
-                            $this->_builds[$row->get(tables\IssueAffectsBuild::ID)] = array(
-                                                        'build' => tables\Builds::getTable()->selectById((int) $row->get(tables\IssueAffectsBuild::BUILD), null, null),
-                                                        'status' => ($status_id) ? Status::getB2DBTable()->selectById((int) $status_id) : null,
-                                                        'confirmed' => (bool) $row->get(tables\IssueAffectsBuild::CONFIRMED),
-                                                        'a_id' => $row->get(tables\IssueAffectsBuild::ID));
+                            $build = tables\Builds::getTable()->selectById((int) $row->get(tables\IssueAffectsBuild::BUILD), null, null);
+                            if ($build instanceof Build) {
+                                $status_id = $row->get(tables\IssueAffectsBuild::STATUS);
+                                $this->_builds[$row->get(tables\IssueAffectsBuild::ID)] = array(
+                                    'build' => $build,
+                                    'status' => ($status_id) ? Status::getB2DBTable()->selectById((int) $status_id) : null,
+                                    'confirmed' => (bool) $row->get(tables\IssueAffectsBuild::CONFIRMED),
+                                    'a_id' => $row->get(tables\IssueAffectsBuild::ID));
+                            }
                         }
                         catch (\Exception $e) { }
                     }
@@ -1180,12 +1239,15 @@
                     {
                         try
                         {
-                            $status_id = $row->get(tables\IssueAffectsComponent::STATUS);
-                            $this->_components[$row->get(tables\IssueAffectsComponent::ID)] = array(
-                                                            'component' => tables\Components::getTable()->selectById((int) $row->get(tables\IssueAffectsComponent::COMPONENT), null, null),
-                                                            'status' => ($status_id) ? Status::getB2DBTable()->selectById((int) $status_id) : null,
-                                                            'confirmed' => (bool) $row->get(tables\IssueAffectsComponent::CONFIRMED),
-                                                            'a_id' => $row->get(tables\IssueAffectsComponent::ID));
+                            $component = tables\Components::getTable()->selectById((int) $row->get(tables\IssueAffectsComponent::COMPONENT), null, null);
+                            if ($component instanceof Component) {
+                                $status_id = $row->get(tables\IssueAffectsComponent::STATUS);
+                                $this->_components[$row->get(tables\IssueAffectsComponent::ID)] = array(
+                                    'component' => $component,
+                                    'status' => ($status_id) ? Status::getB2DBTable()->selectById((int) $status_id) : null,
+                                    'confirmed' => (bool) $row->get(tables\IssueAffectsComponent::CONFIRMED),
+                                    'a_id' => $row->get(tables\IssueAffectsComponent::ID));
+                            }
                         }
                         catch (\Exception $e) { }
                     }
@@ -2134,11 +2196,11 @@
                 $comment->setTargetType(Comment::TYPE_ISSUE);
                 if ($file_comment)
                 {
-                    $comment->setContent(framework\Context::getI18n()->__('A file was uploaded. %link_to_file This comment was attached: %comment', array('%comment' => "\n\n".$file_comment, '%link_to_file' => "[[File:{$file->getOriginalFilename()}|thumb|{$file_description}]]")));
+                    $comment->setContent(framework\Context::getI18n()->__('A file was uploaded. %link_to_file This comment was attached: %comment', array('%comment' => "\n\n".$file_comment, '%link_to_file' => "[[File:{$file->getRealFilename()}|thumb|{$file_description}]]")));
                 }
                 else
                 {
-                    $comment->setContent(framework\Context::getI18n()->__('A file was uploaded. %link_to_file', array('%link_to_file' => "[[File:{$file->getOriginalFilename()}|thumb|{$file_description}]]")));
+                    $comment->setContent(framework\Context::getI18n()->__('A file was uploaded. %link_to_file', array('%link_to_file' => "[[File:{$file->getRealFilename()}|thumb|{$file_description}]]")));
                 }
                 $comment->save();
                 if ($this->_files !== null)
@@ -2218,12 +2280,14 @@
         {
             $issuetype_id = ($issuetype instanceof \thebuggenie\core\entities\Issuetype) ? $issuetype->getID() : $issuetype;
 
+            if (! count($this->getParentIssues())) return false;
+
             foreach ($this->getParentIssues() as $issue)
             {
-                if ($issue->getIssueType()->getID() == $issuetype_id) return true;
+                if ($issue->getIssueType()->getID() != $issuetype_id) return false;
             }
 
-            return false;
+            return true;
         }
 
         /**
@@ -2448,7 +2512,7 @@
 
         public function getParsedDescription($options)
         {
-            return $this->_getParsedText($this->getDescription(), $this->getDescriptionSyntax(), $options);
+            return $this->_getParsedText($this->getDescription(), $this->getDescriptionSyntax(), $options, '_description_parser');
         }
 
         /**
@@ -2461,19 +2525,20 @@
             return $this->_description_syntax;
         }
 
-        protected function _getParsedText($text, $syntax, $options = array())
+        protected function _getParsedText($text, $syntax, $options = array(), $parser_ref = null)
         {
             switch ($syntax)
             {
+                default:
                 case \thebuggenie\core\framework\Settings::SYNTAX_PT:
                     $options = array('plain' => true);
                 case \thebuggenie\core\framework\Settings::SYNTAX_MW:
-                    $wiki_parser = new \thebuggenie\core\helpers\TextParser($text);
+                    $parser = new \thebuggenie\core\helpers\TextParser($text);
                     foreach ($options as $option => $value)
                     {
-                        $wiki_parser->setOption($option, $value);
+                        $parser->setOption($option, $value);
                     }
-                    $text = $wiki_parser->getParsedText();
+                    $text = $parser->getParsedText();
                     break;
                 case \thebuggenie\core\framework\Settings::SYNTAX_MD:
                     $parser = new \thebuggenie\core\helpers\TextParserMarkdown();
@@ -2481,6 +2546,10 @@
                     break;
             }
 
+            if (isset($parser) && ! is_null($parser_ref))
+            {
+                $this->$parser_ref = $parser;
+            }
             return $text;
         }
 
@@ -2538,7 +2607,7 @@
 
         public function getParsedReproductionSteps($options)
         {
-            return $this->_getParsedText($this->getReproductionSteps(), $this->getReproductionStepsSyntax(), $options);
+            return $this->_getParsedText($this->getReproductionSteps(), $this->getReproductionStepsSyntax(), $options, '_reproduction_steps_parser');
         }
 
         /**
@@ -2725,7 +2794,7 @@
                 }
                 elseif ($this->$var_name && $customtype->hasCustomOptions() && !$this->$var_name instanceof \thebuggenie\core\entities\CustomDatatypeOption)
                 {
-                    $this->$var_name = new \thebuggenie\core\entities\CustomDatatypeOption($this->$var_name);
+                    $this->$var_name = tables\CustomFieldOptions::getTable()->selectById($this->$var_name);
                 }
                 elseif ($this->$var_name && $customtype->hasPredefinedOptions() && !$this->$var_name instanceof \thebuggenie\core\entities\common\Identifiable)
                 {
@@ -2747,6 +2816,15 @@
                                 break;
                             case CustomDatatype::CLIENT_CHOICE:
                                 $this->$var_name = tables\Clients::getTable()->selectById($this->$var_name);
+                                break;
+                            case CustomDatatype::USER_CHOICE:
+                                $this->$var_name = tables\Users::getTable()->selectById($this->$var_name);
+                                break;
+                            case CustomDatatype::TEAM_CHOICE:
+                                $this->$var_name = tables\Teams::getTable()->selectById($this->$var_name);
+                                break;
+                            case CustomDatatype::STATUS_CHOICE:
+                                $this->$var_name = Status::getB2DBTable()->selectById($this->$var_name);
                                 break;
                         }
                     }
@@ -2802,6 +2880,20 @@
         public function getAgileColor()
         {
             return $this->_scrumcolor;
+        }
+
+        public function getAgileTextColor()
+        {
+            if (!\thebuggenie\core\framework\Context::isCLI())
+            {
+                \thebuggenie\core\framework\Context::loadLibrary('ui');
+            }
+
+            $rgb = hex2rgb($this->_scrumcolor);
+
+            if (! $rgb) return '#333';
+
+            return 0.299*$rgb['red'] + 0.587*$rgb['green'] + 0.114*$rgb['blue'] > 170 ? '#333' : '#FFF';
         }
 
         /**
@@ -2861,8 +2953,9 @@
                 {
                     $this->_removeParentIssue($related_issue, $relation_id);
                 }
-                $this->touch();
-                $related_issue->touch();
+                $last_updated = time();
+                $this->touch($last_updated);
+                $related_issue->touch($last_updated);
                 tables\IssueRelations::getTable()->doDeleteById($relation_id);
             }
         }
@@ -2938,10 +3031,21 @@
          *
          * @return boolean
          */
-        public function addChildIssue(\thebuggenie\core\entities\Issue $related_issue)
+        public function addChildIssue(\thebuggenie\core\entities\Issue $related_issue, $epic = false)
         {
             if (!$row = tables\IssueRelations::getTable()->getIssueRelation($this->getID(), $related_issue->getID()))
             {
+                if (! $epic && ! $this->getMilestone() instanceof Milestone && $related_issue->getMilestone() instanceof Milestone)
+                {
+                    $related_issue->removeMilestone();
+                    $related_issue->save();
+                }
+                else if ($this->getMilestone() instanceof Milestone)
+                {
+                    $related_issue->setMilestone($this->getMilestone()->getID());
+                    $related_issue->save();
+                }
+
                 $res = tables\IssueRelations::getTable()->addChildIssue($this->getID(), $related_issue->getID());
                 $this->_child_issues = null;
 
@@ -2949,7 +3053,9 @@
                 $this->addLogEntry(tables\Log::LOG_ISSUE_DEPENDS, framework\Context::getI18n()->__('This %this_issuetype now depends on the solution of %issuetype %issue_no', array('%this_issuetype' => $this->getIssueType()->getName(), '%issuetype' => $related_issue->getIssueType()->getName(), '%issue_no' => $related_issue->getFormattedIssueNo())));
                 $this->calculateTime();
                 $this->save();
-                $related_issue->touch();
+                $last_updated = time();
+                $this->touch($last_updated);
+                $related_issue->touch($last_updated);
 
                 return true;
             }
@@ -3685,9 +3791,14 @@
             return $this->_last_updated;
         }
 
-        public function touch()
+        public function touch($last_updated = null)
         {
-            tables\Issues::getTable()->touchIssue($this->getID());
+            tables\Issues::getTable()->touchIssue($this->getID(), $last_updated);
+
+            foreach ($this->getParentIssues() as $parent_issue)
+            {
+                tables\Issues::getTable()->touchIssue($parent_issue->getID(), $last_updated);
+            }
         }
 
         /**
@@ -4068,6 +4179,8 @@
         public function deleteIssue()
         {
             $this->_deleted = true;
+            $this->touch();
+            tables\IssueRelations::getTable()->removeIssueRelations($this->getID());
         }
 
         /**
@@ -4211,7 +4324,7 @@
         {
             foreach ($this->getFiles() as $file_id => $file)
             {
-                if (mb_strtolower($filename) == mb_strtolower($file->getOriginalFilename()))
+                if (mb_strtolower($filename) == mb_strtolower($file->getRealFilename()) || mb_strtolower($filename) == mb_strtolower($file->getOriginalFilename()))
                 {
                     return $file;
                 }
@@ -4647,28 +4760,14 @@
                             switch ($customdatatype->getType())
                             {
                                 case CustomDatatype::EDITIONS_CHOICE:
-                                    $option_object = tables\Editions::getTable()->selectById($this->getCustomField($key));
-                                    break;
                                 case CustomDatatype::COMPONENTS_CHOICE:
-                                    $option_object = tables\Components::getTable()->selectById($this->getCustomField($key));
-                                    break;
                                 case CustomDatatype::RELEASES_CHOICE:
-                                    $option_object = tables\Builds::getTable()->selectById($this->getCustomField($key));
-                                    break;
                                 case CustomDatatype::MILESTONE_CHOICE:
-                                    $option_object = tables\Milestones::getTable()->selectById($this->getCustomField($key));
-                                    break;
-                                case CustomDatatype::STATUS_CHOICE:
-                                    $option_object = tables\ListTypes::getTable()->selectById($this->getCustomField($key));
-                                    break;
-                                case CustomDatatype::USER_CHOICE:
-                                    $option_object = \thebuggenie\core\entities\User::getB2DBTable()->selectById($this->getCustomField($key));
-                                    break;
-                                case CustomDatatype::TEAM_CHOICE:
-                                    $option_object = \thebuggenie\core\entities\Team::getB2DBTable()->selectById($this->getCustomField($key));
-                                    break;
                                 case CustomDatatype::CLIENT_CHOICE:
-                                    $option_object = tables\Clients::getTable()->selectById($this->getCustomField($key));
+                                case CustomDatatype::STATUS_CHOICE:
+                                case CustomDatatype::USER_CHOICE:
+                                case CustomDatatype::TEAM_CHOICE:
+                                    $option_object = $this->getCustomField($key);
                                     break;
                             }
                         }
@@ -4965,7 +5064,7 @@
                                     $old_time = array('months' => $this->getChangedPropertyOriginal('_spent_months'),
                                                         'weeks' => $this->getChangedPropertyOriginal('_spent_weeks'),
                                                         'days' => $this->getChangedPropertyOriginal('_spent_days'),
-                                                        'hours' => $this->getChangedPropertyOriginal('_spent_hours'),
+                                                        'hours' => round($this->getChangedPropertyOriginal('_spent_hours') / 100, 2),
                                                         'points' => $this->getChangedPropertyOriginal('_spent_points'));
 
                                     $old_formatted_time = (array_sum($old_time) > 0) ? Issue::getFormattedTime($old_time) : framework\Context::getI18n()->__('No time spent');
@@ -5040,7 +5139,11 @@
                                         case CustomDatatype::EDITIONS_CHOICE:
                                         case CustomDatatype::COMPONENTS_CHOICE:
                                         case CustomDatatype::RELEASES_CHOICE:
+                                        case CustomDatatype::MILESTONE_CHOICE:
                                         case CustomDatatype::STATUS_CHOICE:
+                                        case CustomDatatype::TEAM_CHOICE:
+                                        case CustomDatatype::USER_CHOICE:
+                                        case CustomDatatype::CLIENT_CHOICE:
                                             $old_object = null;
                                             $new_object = null;
                                             try
@@ -5048,16 +5151,28 @@
                                                 switch ($customdatatype->getType())
                                                 {
                                                     case CustomDatatype::EDITIONS_CHOICE:
-                                                        $old_object = \thebuggenie\core\entities\Edition::getB2DBTable()->selectById($original_value);
+                                                        $old_object = Edition::getB2DBTable()->selectById($original_value);
                                                         break;
                                                     case CustomDatatype::COMPONENTS_CHOICE:
-                                                        $old_object = \thebuggenie\core\entities\Component::getB2DBTable()->selectById($original_value);
+                                                        $old_object = Component::getB2DBTable()->selectById($original_value);
                                                         break;
                                                     case CustomDatatype::RELEASES_CHOICE:
-                                                        $old_object = \thebuggenie\core\entities\Build::getB2DBTable()->selectById($original_value);
+                                                        $old_object = Build::getB2DBTable()->selectById($original_value);
+                                                        break;
+                                                    case CustomDatatype::MILESTONE_CHOICE:
+                                                        $old_object = Milestone::getB2DBTable()->selectById($original_value);
                                                         break;
                                                     case CustomDatatype::STATUS_CHOICE:
-                                                        $old_object = \thebuggenie\core\entities\Status::getB2DBTable()->selectById($original_value);
+                                                        $old_object = Status::getB2DBTable()->selectById($original_value);
+                                                        break;
+                                                    case CustomDatatype::TEAM_CHOICE:
+                                                        $old_object = Team::getB2DBTable()->selectById($original_value);
+                                                        break;
+                                                    case CustomDatatype::USER_CHOICE:
+                                                        $old_object = User::getB2DBTable()->selectById($original_value);
+                                                        break;
+                                                    case CustomDatatype::CLIENT_CHOICE:
+                                                        $old_object = Client::getB2DBTable()->selectById($original_value);
                                                         break;
                                                 }
                                             }
@@ -5067,16 +5182,14 @@
                                                 switch ($customdatatype->getType())
                                                 {
                                                     case CustomDatatype::EDITIONS_CHOICE:
-                                                        $new_object = \thebuggenie\core\entities\Edition::getB2DBTable()->selectById($this->getCustomField($key));
-                                                        break;
                                                     case CustomDatatype::COMPONENTS_CHOICE:
-                                                        $new_object = \thebuggenie\core\entities\Component::getB2DBTable()->selectById($this->getCustomField($key));
-                                                        break;
                                                     case CustomDatatype::RELEASES_CHOICE:
-                                                        $new_object = \thebuggenie\core\entities\Build::getB2DBTable()->selectById($this->getCustomField($key));
-                                                        break;
+                                                    case CustomDatatype::MILESTONE_CHOICE:
                                                     case CustomDatatype::STATUS_CHOICE:
-                                                        $new_object = \thebuggenie\core\entities\Status::getB2DBTable()->selectById($this->getCustomField($key));
+                                                    case CustomDatatype::TEAM_CHOICE:
+                                                    case CustomDatatype::USER_CHOICE:
+                                                    case CustomDatatype::CLIENT_CHOICE:
+                                                        $new_object = $this->getCustomField($key);
                                                         break;
                                                 }
                                             }
@@ -5256,7 +5369,7 @@
                 }
             }
             $this->_addUpdateNotifications($updated_by);
-            $event = \thebuggenie\core\framework\Event::createNew('core', 'Issue::save', $this, compact('comment', 'log_items', 'updated_by'));
+            $event = \thebuggenie\core\framework\Event::createNew('core', 'thebuggenie\core\entities\Issue::save', $this, compact('comment', 'log_items', 'updated_by'));
             $event->trigger();
         }
 
@@ -5282,9 +5395,27 @@
             }
             else
             {
+                $_description_parser = $this->_getDescriptionParser();
+                $_reproduction_steps_parser = $this->_getReproductionStepsParser();
+                if (! is_null($_description_parser) && $_description_parser->hasMentions())
+                {
+                    foreach ($_description_parser->getMentions() as $user)
+                    {
+                        if ($user->getID() == framework\Context::getUser()->getID()) continue;
+                        $this->_addNotification(Notification::TYPE_ISSUE_MENTIONED, $user, $this->getPostedBy());
+                    }
+                }
+                if (! is_null($_reproduction_steps_parser) && $_reproduction_steps_parser->hasMentions())
+                {
+                    foreach ($_reproduction_steps_parser->getMentions() as $user)
+                    {
+                        if ($user->getID() == framework\Context::getUser()->getID()) continue;
+                        $this->_addNotification(Notification::TYPE_ISSUE_MENTIONED, $user, $this->getPostedBy());
+                    }
+                }
                 $this->addLogEntry(tables\Log::LOG_ISSUE_CREATED, null, false, $this->getPosted());
                 $this->_addCreateNotifications($this->getPostedBy());
-                \thebuggenie\core\framework\Event::createNew('core', 'Issue::createNew', $this)->trigger();
+                \thebuggenie\core\framework\Event::createNew('core', 'thebuggenie\core\entities\Issue::createNew', $this)->trigger();
             }
 
             if (in_array(\thebuggenie\core\framework\Settings::getUserSetting(\thebuggenie\core\framework\Settings::SETTINGS_USER_SUBSCRIBE_CREATED_UPDATED_COMMENTED_ISSUES, framework\Context::getUser()->getID()), array(null, true)))
@@ -5312,6 +5443,36 @@
             }
 
             return true;
+        }
+
+        public function saveSpentTime()
+        {
+            $spent_times = array('months', 'weeks', 'days', 'hours', 'points');
+            $spent_times_changed_items = array();
+            $changed_properties = $this->_getChangedProperties();
+
+            foreach ($spent_times as $spent_time_unit)
+            {
+                $property = '_spent_'.$spent_time_unit;
+
+                if (! $this->_isPropertyChanged($property)) continue;
+
+                $spent_times_changed_items[$property] = $changed_properties[$property];
+                unset($changed_properties[$property]);
+            }
+
+            foreach ($changed_properties as $property => $property_values)
+            {
+                $this->_revertPropertyChange($property);
+            }
+
+            $this->_changed_items = array();
+            $this->save();
+
+            foreach ($changed_properties as $property => $property_values)
+            {
+                $this->_addChangedProperty($property, $property_values['current_value']);
+            }
         }
 
         public function checkTaskStates()
@@ -5591,11 +5752,18 @@
                     case 'resolution':
                     case 'priority':
                     case 'severity':
-                    case 'milestone':
                     case 'category':
                     case 'reproducability':
                         $method = 'get'.ucfirst($field);
                         $value = $this->$method();
+                        break;
+                    case 'milestone':
+                        $method = 'get'.ucfirst($field);
+                        $value = $this->$method();
+                        if (is_numeric($value) && $value == 0) {
+                            $value = new Milestone();
+                            $value->setID(0);
+                        }
                         break;
                     case 'owner':
                         $value = $this->getOwner();
@@ -5779,6 +5947,59 @@
             }
 
             return $users;
+        }
+
+        public function getMentionedUsers()
+        {
+            $users = array();
+            $_description_parser = $this->_getDescriptionParser();
+            $_reproduction_steps_parser = $this->_getReproductionStepsParser();
+            if (! is_null($_description_parser) && $_description_parser->hasMentions())
+            {
+                foreach ($_description_parser->getMentions() as $user)
+                {
+                    $users[$user->getID()] = $user;
+                }
+            }
+            if (! is_null($_reproduction_steps_parser) && $_reproduction_steps_parser->hasMentions())
+            {
+                foreach ($_reproduction_steps_parser->getMentions() as $user)
+                {
+                    $users[$user->getID()] = $user;
+                }
+            }
+            foreach ($this->getComments() as $comment)
+            {
+                foreach ($comment->getMentions() as $user)
+                {
+                    $users[$user->getID()] = $user;
+                }
+            }
+
+            return $users;
+        }
+
+        public function getMilestoneOrder()
+        {
+            return $this->_milestone_order;
+        }
+
+        protected function _getDescriptionParser()
+        {
+            if (is_null($this->_description_parser))
+            {
+                $this->getParsedDescription(array());
+            }
+            return $this->_description_parser;
+        }
+
+        protected function _getReproductionStepsParser()
+        {
+            if (is_null($this->_reproduction_steps_parser))
+            {
+                $this->getParsedReproductionSteps(array());
+            }
+            return $this->_reproduction_steps_parser;
         }
 
     }

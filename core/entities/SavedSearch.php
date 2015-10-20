@@ -89,6 +89,13 @@
         protected $_issues_per_page = 50;
 
         /**
+         * Quickfound issue
+         *
+         * @var array|\thebuggenie\core\entities\Issue
+         */
+        protected $_quickfound_issues;
+
+        /**
          * Search offset
          *
          * @var integer
@@ -212,8 +219,6 @@
         {
             foreach ($this->getFilters() as $filter)
             {
-                if ($is_new) $filter->clearID();
-
                 $filter->setSearchId($this);
                 $filter->save();
             }
@@ -287,13 +292,17 @@
                 $this->_templatename = ($request->hasParameter('template') && self::isTemplateValid($request['template'])) ? $request['template'] : 'results_normal';
                 $this->_templateparameter = $request['template_parameter'];
 
-                $this->_issues_per_page = $request->getParameter('issues_per_page', 50);
+                $this->_issues_per_page = (in_array($request->getRequestedFormat(), array('csv', 'xlsx', 'ods'))) ? 0 : $request->getParameter('issues_per_page', 50);
                 $this->_offset = $request->getParameter('offset', 0);
 
                 if ($request['quicksearch'])
                 {
-                    $this->setSortFields(array(tables\Issues::LAST_UPDATED => 'asc'));
-                    $request->setParameter('fs', array('text' => array('v' => $request['term'], 'o' => '=')));
+                    $this->setSortFields(array(tables\Issues::LAST_UPDATED => 'desc'));
+
+                    if ($request['term'])
+                    {
+                        $request->setParameter('fs', array('text' => array('v' => $request['term'], 'o' => '=')));
+                    }
                 }
 
                 $this->_filters = SearchFilter::getFromRequest($request, $this);
@@ -618,7 +627,7 @@
             {
                 if (!strlen($this->_sortfields))
                 {
-                    $this->_sortfields = array(tables\Issues::LAST_UPDATED => 'asc');
+                    $this->_sortfields = array(tables\Issues::LAST_UPDATED => 'desc');
                 }
                 else
                 {
@@ -709,6 +718,10 @@
 
         public function getIssues()
         {
+            if ($this->hasQuickfoundIssues()) {
+                return $this->_quickfound_issues;
+            }
+
             if ($this->_issues === null)
             {
                 $this->_performSearch();
@@ -719,6 +732,10 @@
 
         public function getTotalNumberOfIssues()
         {
+            if ($this->hasQuickfoundIssues()) {
+                return count($this->_quickfound_issues);
+            }
+
             if ($this->_total_number_of_issues === null)
             {
                 $this->_performSearch();
@@ -735,6 +752,41 @@
             }
 
             return count($this->_issues);
+        }
+
+        public function extractIssues($matches)
+        {
+            $issue = Issue::getIssueFromLink($matches["issues"]);
+            if ($issue instanceof Issue)
+            {
+                if (!framework\Context::isProjectContext() || (framework\Context::isProjectContext() && $issue->getProjectID() == framework\Context::getCurrentProject()->getID()))
+                {
+                    $this->_quickfound_issues[] = $issue;
+                }
+            }
+        }
+
+        public function getQuickfoundIssues()
+        {
+            return $this->_quickfound_issues;
+        }
+
+        public function hasQuickfoundIssues()
+        {
+            if ($this->_quickfound_issues === null) {
+                $this->_quickfound_issues = array();
+                if ($this->getSearchterm()) {
+                    preg_replace_callback(\thebuggenie\core\helpers\TextParser::getIssueRegex(), array($this, 'extractIssues'), $this->getSearchterm());
+                }
+            }
+            if (!count($this->_quickfound_issues)) {
+                $issue = Issue::getIssueFromLink($this->getSearchterm());
+                if ($issue instanceof Issue) {
+                    $this->_quickfound_issues[] = $issue;
+                }
+            }
+
+            return (bool) count($this->_quickfound_issues);
         }
 
         public function hasPagination()

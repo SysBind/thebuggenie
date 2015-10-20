@@ -11,7 +11,7 @@
     <form action="<?php echo make_url('transition_issues', array('project_key' => $project->getKey(), 'transition_id' => $transition->getID())); ?>" method="post" onsubmit="TBG.Search.interactiveWorkflowTransition('<?php echo make_url('transition_issues', array('project_key' => $project->getKey(), 'transition_id' => $transition->getID())); ?>', <?php echo $transition->getID(); ?>, 'workflow_transition_form');return false;" accept-charset="<?php echo \thebuggenie\core\framework\Context::getI18n()->getCharset(); ?>" id="workflow_transition_form">
         <input type="hidden" name="issue_ids[<?php echo $issue->getID(); ?>]" value="<?php echo $issue->getID(); ?>">
 <?php elseif ($issue instanceof \thebuggenie\core\entities\Issue): ?>
-    <form action="<?php echo make_url('transition_issue', array('project_key' => $project->getKey(), 'issue_id' => $issue->getID(), 'transition_id' => $transition->getID())); ?>" method="post" accept-charset="<?php echo \thebuggenie\core\framework\Context::getI18n()->getCharset(); ?>">
+    <form action="<?php echo make_url('transition_issue', array('project_key' => $project->getKey(), 'issue_id' => $issue->getID(), 'transition_id' => $transition->getID())); ?>" method="post" accept-charset="<?php echo \thebuggenie\core\framework\Context::getI18n()->getCharset(); ?>" id="workflow_transition_<?php echo $transition->getID(); ?>_form">
 <?php else: ?>
         <form action="<?php echo make_url('transition_issues', array('project_key' => $project->getKey(), 'transition_id' => $transition->getID())); ?>" method="post" onsubmit="TBG.Search.bulkWorkflowTransition('<?php echo make_url('transition_issues', array('project_key' => $project->getKey(), 'transition_id' => $transition->getID())); ?>', <?php echo $transition->getID(); ?>);return false;" accept-charset="<?php echo \thebuggenie\core\framework\Context::getI18n()->getCharset(); ?>" id="bulk_workflow_transition_form">
     <?php foreach ($issues as $issue_id => $i): ?>
@@ -26,7 +26,7 @@
                 <?php if ((($issue instanceof \thebuggenie\core\entities\Issue && $issue->isUpdateable() && $issue->canEditAssignee()) || isset($issues)) && $transition->hasAction(\thebuggenie\core\entities\WorkflowTransitionAction::ACTION_ASSIGN_ISSUE) && !$transition->getAction(\thebuggenie\core\entities\WorkflowTransitionAction::ACTION_ASSIGN_ISSUE)->hasTargetValue()): ?>
                     <li id="transition_popup_assignee_div_<?php echo $transition->getID(); ?>">
                         <input type="hidden" name="assignee_id" id="popup_assigned_to_id_<?php echo $transition->getID(); ?>" value="<?php echo ($issue instanceof \thebuggenie\core\entities\Issue && $issue->hasAssignee() ? $issue->getAssignee()->getID() : 0); ?>">
-                        <input type="hidden" name="assignee_type" id="popup_assigned_to_type_<?php echo $transition->getID(); ?>" value="<?php echo ($issue instanceof \thebuggenie\core\entities\Issue ? $issue->getAssigneeType() : ''); ?>">
+                        <input type="hidden" name="assignee_type" id="popup_assigned_to_type_<?php echo $transition->getID(); ?>" value="<?php echo ($issue instanceof \thebuggenie\core\entities\Issue && $issue->hasAssignee() ? ($issue->getAssignee() instanceof \thebuggenie\core\entities\User ? 'user' : 'team') : ''); ?>">
                         <input type="hidden" name="assignee_teamup" id="popup_assigned_to_teamup_<?php echo $transition->getID(); ?>" value="0">
                         <label for="transition_popup_set_assignee_<?php echo $transition->getID(); ?>"><?php echo __('Assignee'); ?></label>
                         <span style="width: 170px; display: <?php if ($issue instanceof \thebuggenie\core\entities\Issue && $issue->isAssigned()): ?>inline<?php else: ?>none<?php endif; ?>;" id="popup_assigned_to_name_<?php echo $transition->getID(); ?>">
@@ -39,7 +39,7 @@
                             <?php endif; ?>
                         </span>
                         <span class="faded_out" id="popup_no_assigned_to_<?php echo $transition->getID(); ?>"<?php if ($issue instanceof \thebuggenie\core\entities\Issue && $issue->isAssigned()): ?> style="display: none;"<?php endif; ?>><?php echo __('Not assigned to anyone'); ?></span>
-                        <a href="javascript:void(0);" onclick="$('popup_assigned_to_change_<?php echo $transition->getID(); ?>').toggle();" title="<?php echo __('Click to change assignee'); ?>"><?php echo image_tag('tabmenu_dropdown.png', array('style' => 'float: right;')); ?></a>
+                        <a href="javascript:void(0);" class="dropper" data-target="popup_assigned_to_change_<?php echo $transition->getID(); ?>" title="<?php echo __('Click to change assignee'); ?>" style="display: inline-block; float: right; line-height: 1em;"><?php echo image_tag('tabmenu_dropdown.png', array('style' => 'float: none; margin: 3px;')); ?></a>
                         <div id="popup_assigned_to_name_indicator_<?php echo $transition->getID(); ?>" style="display: none;"><?php echo image_tag('spinning_16.gif', array('style' => 'float: right; margin-left: 5px;')); ?></div>
                         <div class="faded_out" id="popup_assigned_to_teamup_info_<?php echo $transition->getID(); ?>" style="clear: both; display: none;"><?php echo __('You will be teamed up with this user'); ?></div>
                     </li>
@@ -165,6 +165,76 @@
                         </li>
                     <?php endif; ?>
                 <?php endif; ?>
+                <?php foreach ($customfields_list as $field => $info): ?>
+                    <?php if (($issue instanceof \thebuggenie\core\entities\Issue && ($issue->isUpdateable()) || isset($issues)) && $transition->hasAction(\thebuggenie\core\entities\WorkflowTransitionAction::CUSTOMFIELD_SET_PREFIX.$field) && !$transition->getAction(\thebuggenie\core\entities\WorkflowTransitionAction::CUSTOMFIELD_SET_PREFIX.$field)->hasTargetValue()): ?>
+                        <li id="transition_popup_<?php echo $field; ?>_div_<?php echo $transition->getID(); ?>">
+                            <label for="transition_popup_set_<?php echo $field; ?>_<?php echo $transition->getID(); ?>"><?php echo $info['title']; ?></label>
+                            <?php if (array_key_exists('choices', $info) && is_array($info['choices'])): ?>
+                                <select name="<?php echo $field; ?>_id" id="transition_popup_set_<?php echo $field; ?>_<?php echo $transition->getID(); ?>">
+                                    <?php foreach ($info['choices'] ?: array() as $choice): ?>
+                                        <?php if (!$transition->hasPostValidationRule(\thebuggenie\core\entities\WorkflowTransitionValidationRule::CUSTOMFIELD_VALIDATE_PREFIX.$field) || $transition->getPostValidationRule(\thebuggenie\core\entities\WorkflowTransitionValidationRule::CUSTOMFIELD_VALIDATE_PREFIX.$field)->isValueValid($choice->getID())): ?>
+                                            <option value="<?php echo $choice->getID(); ?>"<?php if ($issue instanceof \thebuggenie\core\entities\Issue && $issue->getCustomField($field) instanceof \thebuggenie\core\entities\CustomDatatypeOption && $issue->getCustomField($field)->getID() == $choice->getID()): ?> selected<?php endif; ?>><?php echo __($choice->getName()); ?></option>
+                                        <?php endif; ?>
+                                    <?php endforeach; ?>
+                                </select>
+                            <?php elseif ($info['type'] == \thebuggenie\core\entities\CustomDatatype::DATE_PICKER): ?>
+                                <div id="customfield_<?php echo $field; ?>_calendar_container"></div>
+                                <script type="text/javascript">
+                                    require(['domReady', 'thebuggenie/tbg', 'calendarview'], function (domReady, tbgjs, Calendar) {
+                                        domReady(function () {
+                                            Calendar.setup({
+                                                dateField: '<?php echo $field; ?>_id',
+                                                parentElement: 'customfield_<?php echo $field; ?>_calendar_container'
+                                            });
+                                        });
+                                    });
+                                </script>
+                            <?php else: ?>
+                                <select name="<?php echo $field; ?>_id" id="transition_popup_set_<?php echo $field; ?>_<?php echo $transition->getID(); ?>">
+                                    <?php
+
+                                        switch ($info['type'])
+                                        {
+                                            case \thebuggenie\core\entities\CustomDatatype::EDITIONS_CHOICE:
+                                                foreach ($project->getEditions() as $choice): ?>
+                                                    <option value="<?php echo $choice->getID(); ?>"<?php if ($issue instanceof \thebuggenie\core\entities\Issue && $issue->getCustomField($field) instanceof \thebuggenie\core\entities\Edition && $issue->getCustomField($field)->getID() == $choice->getID()): ?> selected<?php endif; ?>><?php echo __($choice->getName()); ?></option>
+                                                <?php endforeach;
+                                                break;
+                                            case \thebuggenie\core\entities\CustomDatatype::MILESTONE_CHOICE:
+                                                foreach ($project->getMilestones() as $choice): ?>
+                                                    <option value="<?php echo $choice->getID(); ?>"<?php if ($issue instanceof \thebuggenie\core\entities\Issue && $issue->getCustomField($field) instanceof \thebuggenie\core\entities\Milestone && $issue->getCustomField($field)->getID() == $choice->getID()): ?> selected<?php endif; ?>><?php echo __($choice->getName()); ?></option>
+                                                <?php endforeach;
+                                                break;
+                                            case \thebuggenie\core\entities\CustomDatatype::STATUS_CHOICE:
+                                                foreach (\thebuggenie\core\entities\Status::getAll() as $choice): ?>
+                                                    <option value="<?php echo $choice->getID(); ?>"<?php if ($issue instanceof \thebuggenie\core\entities\Issue && $issue->getCustomField($field) instanceof \thebuggenie\core\entities\Edition && $issue->getCustomField($field)->getID() == $choice->getID()): ?> selected<?php endif; ?>><?php echo __($choice->getName()); ?></option>
+                                                <?php endforeach;
+                                                break;
+                                            case \thebuggenie\core\entities\CustomDatatype::COMPONENTS_CHOICE:
+                                                foreach ($project->getComponents() as $choice): ?>
+                                                    <option value="<?php echo $choice->getID(); ?>"<?php if ($issue instanceof \thebuggenie\core\entities\Issue && $issue->getCustomField($field) instanceof \thebuggenie\core\entities\Edition && $issue->getCustomField($field)->getID() == $choice->getID()): ?> selected<?php endif; ?>><?php echo __($choice->getName()); ?></option>
+                                                <?php endforeach;
+                                                break;
+                                            case \thebuggenie\core\entities\CustomDatatype::RELEASES_CHOICE:
+                                                foreach ($project->getBuilds() as $choice): ?>
+                                                    <option value="<?php echo $choice->getID(); ?>"<?php if ($issue instanceof \thebuggenie\core\entities\Issue && $issue->getCustomField($field) instanceof \thebuggenie\core\entities\Edition && $issue->getCustomField($field)->getID() == $choice->getID()): ?> selected<?php endif; ?>><?php echo __($choice->getName()); ?></option>
+                                                <?php endforeach;
+                                                break;
+                                            case \thebuggenie\core\entities\CustomDatatype::INPUT_TEXT:
+                                                ?>
+                                                <input type="text" name="<?php echo $field; ?>_id" placeholder="<?php echo $info['name'] ?>">
+                                                <?php
+                                                break;
+                                            case \thebuggenie\core\entities\CustomDatatype::INPUT_TEXTAREA_SMALL:
+                                                include_component('main/textarea', array('area_name' => $field.'_id', 'target_type' => 'issue', 'target_id' => $issue->getID(), 'area_id' => $field.'_'.$transition->getID(), 'height' => '120px', 'width' => '790px', 'value' => ''));
+                                                break;
+                                        }
+                                    ?>
+                                </select>
+                            <?php endif; ?>
+                        </li>
+                    <?php endif; ?>
+                <?php endforeach; ?>
                 <?php if ($transition->hasAction(\thebuggenie\core\entities\WorkflowTransitionAction::ACTION_USER_STOP_WORKING)): ?>
                     <?php if ($issue instanceof \thebuggenie\core\entities\Issue): ?>
                         <li id="transition_popup_stop_working_div_<?php echo $transition->getID(); ?>">
@@ -191,14 +261,14 @@
             </ul>
             <div style="text-align: right; margin-right: 5px;">
                 <?php echo image_tag('spinning_32.gif', array('style' => 'margin: -3px 0 -3px 5px; display: none;', 'id' => 'transition_working_'.$transition->getID().'_indicator')); ?>
-                <a href="javascript:void(0);" onclick="($('workflow_transition_fullpage')) ? $('workflow_transition_fullpage').fade({duration: 0.2}) : TBG.Main.Helpers.Backdrop.reset();"><?php echo __('Cancel'); ?></a>
+                <a href="javascript:void(0);" id="transition_working_<?php echo $transition->getID(); ?>_cancel" onclick="($('workflow_transition_fullpage')) ? $('workflow_transition_fullpage').fade({duration: 0.2}) : TBG.Main.Helpers.Backdrop.reset();"><?php echo __('Cancel'); ?></a>
                 <?php echo __('%cancel or %submit', array('%cancel' => '', '%submit' => '')); ?>
                 <input type="submit" class="workflow_transition_submit_button" value="<?php echo $transition->getName(); ?>" id="transition_working_<?php echo $transition->getID(); ?>_submit">
             </div>
         </div>
     </form>
     <?php if (($issue instanceof \thebuggenie\core\entities\Issue && ($issue->canEditAssignee()) || isset($issues)) && $transition->hasAction(\thebuggenie\core\entities\WorkflowTransitionAction::ACTION_ASSIGN_ISSUE) && !$transition->getAction(\thebuggenie\core\entities\WorkflowTransitionAction::ACTION_ASSIGN_ISSUE)->hasTargetValue()): ?>
-        <?php include_component('identifiableselector', array(    'html_id'             => 'popup_assigned_to_change_'.$transition->getID(),
+        <?php include_component('main/identifiableselector', array(    'html_id'             => 'popup_assigned_to_change_'.$transition->getID(),
                                                                 'header'             => __('Assign this issue'),
                                                                 'callback'             => "TBG.Issues.updateWorkflowAssignee('" . make_url('issue_gettempfieldvalue', array('field' => 'assigned_to', 'identifiable_type' => '%identifiable_type', 'value' => '%identifiable_value')) . "', %identifiable_value, %identifiable_type, ".$transition->getID().");",
                                                                 'teamup_callback'     => "TBG.Issues.updateWorkflowAssigneeTeamup('" . make_url('issue_gettempfieldvalue', array('field' => 'assigned_to', 'identifiable_type' => '%identifiable_type', 'value' => '%identifiable_value')) . "', %identifiable_value, %identifiable_type, ".$transition->getID().");",
@@ -206,7 +276,7 @@
                                                                 'base_id'            => 'popup_assigned_to_'.$transition->getID(),
                                                                 'include_teams'        => true,
                                                                 'allow_clear'        => false,
-                                                                'style'                => array('top' => '65px', 'right' => '5px'),
+                                                                'style'                => array('top' => '38px', 'right' => '5px'),
                                                                 'absolute'            => true)); ?>
     <?php endif; ?>
 </div>

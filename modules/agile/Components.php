@@ -67,13 +67,29 @@
                     break;
                 }
             }
-        }
 
-        public function componentMilestoneWhiteboardStatusDetails()
-        {
-            $this->statuses = \thebuggenie\core\entities\Status::getAll();
-            if ($this->milestone instanceof \thebuggenie\core\entities\Milestone)
-                $this->status_details = \thebuggenie\core\entities\tables\Issues::getTable()->getMilestoneDistributionDetails($this->milestone->getID());
+            $transition_ids = array();
+            $same_transition_statuses = array();
+
+            foreach ($this->transitions as $status_id => $transitions)
+            {
+                if (! in_array($status_id, $this->statuses)) continue;
+
+                foreach ($transitions as $transition)
+                {
+                    if (in_array($transition->getID(), $transition_ids))
+                    {
+                         $same_transition_statuses[] = $status_id;
+                    }
+                    else
+                    {
+                        $transition_ids[] = $transition->getID();
+                    }
+                }
+            }
+
+            $this->same_transition_statuses = $same_transition_statuses;
+            $this->statuses_occurred = array_fill_keys($this->statuses, 0);
         }
 
         public function componentColorpicker()

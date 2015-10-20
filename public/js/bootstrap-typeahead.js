@@ -18,7 +18,15 @@
  * ============================================================ */
 
 
-!function($){
+(function(factory) {
+    if (typeof define === 'function' && define.amd) {
+        // AMD Registration
+        define([ 'jquery' ], factory);
+    } else {
+        // Browser globals
+        factory(jQuery);
+    }
+}(function($) {
 
   "use strict"; // jshint ;_;
 
@@ -63,7 +71,7 @@
       this.$menu
         .insertAfter(this.$element)
         .css({
-          top: pos.top + pos.height
+          top: pos.top + pos.height - 3
         , left: pos.left
         })
         .show()
@@ -278,6 +286,7 @@
       this.mousedover = true
       this.$menu.find('.active').removeClass('active')
       $(e.currentTarget).addClass('active')
+      this.focused = true
     }
 
   , mouseleave: function (e) {
@@ -332,4 +341,6 @@
     $this.typeahead($this.data())
   })
 
-}(window.jQuery);
+
+}));
+

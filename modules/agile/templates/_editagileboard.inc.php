@@ -14,7 +14,7 @@
             <input type="hidden" name="swimlane" value="<?php echo $board->getSwimlaneType(); ?>" id="swimlane_input">
             <input type="hidden" name="use_swimlane" value="<?php echo (int) $board->usesSwimlanes(); ?>" id="use_swimlane_input">
             <label for="agileboard_name_<?php echo $board->getID(); ?>"><?php echo __('Name'); ?></label>
-            <input type="text" class="primary" value="<?php echo $board->getName(); ?>" name="name" id="agileboard_name_<?php echo $board->getID(); ?>" placeholder="<?php echo __e('Type a short, descriptive name such as "Project planning board"'); ?>">
+            <input type="text" class="primary" value="<?php echo $board->getName(); ?>" name="name" id="agileboard_name_<?php echo $board->getID(); ?>" placeholder="<?php echo __('Type a short, descriptive name such as "Project planning board"'); ?>">
             <table class="sectioned_table">
                 <tr>
                     <td>
@@ -58,7 +58,7 @@
                     </td>
                     <td>
                         <label for="agileboard_description_<?php echo $board->getID(); ?>"><?php echo __('Description'); ?></label>
-                        <input type="text" class="secondary" value="<?php echo $board->getDescription(); ?>" name="description" id="agileboard_description_<?php echo $board->getID(); ?>" placeholder="<?php echo __e('Type a short description to be shown in the board list'); ?>">
+                        <input type="text" class="secondary" value="<?php echo $board->getDescription(); ?>" name="description" id="agileboard_description_<?php echo $board->getID(); ?>" placeholder="<?php echo __('Type a short description to be shown in the board list'); ?>">
                     </td>
                 </tr>
             </table>
@@ -88,7 +88,7 @@
                         <div class="fancyfilter filter interactive_dropdown" data-filterkey="task_issuetype_id" data-value="<?php echo $board->getTaskIssuetypeID(); ?>" data-no-selection-value="<?php echo __('None selected'); ?>">
                             <input type="hidden" name="task_issuetype_id" value="<?php echo $board->getTaskIssuetypeID(); ?>" id="filter_task_issuetype_id_value_input">
                             <label><?php echo __('Task issuetype'); ?></label>
-                            <span class="value"><?php echo $board->getTaskIssuetype()->getName(); ?></span>
+                            <span class="value"><?php echo ($board->getTaskIssuetypeID()) ? $board->getTaskIssuetype()->getName() : __('None selected'); ?></span>
                             <div class="interactive_menu">
                                 <h1><?php echo __('Select task issuetype'); ?></h1>
                                 <div class="interactive_values_container">

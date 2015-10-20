@@ -395,6 +395,7 @@
             {
                 $crit->addWhere(self::MILESTONE, $milestone_id);
             }
+            $crit->addSelectionColumn(self::STATE, 'state');
             $crit->addSelectionColumn(self::ESTIMATED_POINTS, 'estimated_points');
             $crit->addSelectionColumn(self::ESTIMATED_HOURS, 'estimated_hours');
             $crit->addSelectionColumn(self::ESTIMATED_DAYS, 'estimated_days');
@@ -445,7 +446,7 @@
         public function clearMilestone($milestone_id)
         {
             $crit = $this->getCriteria();
-            $crit->addUpdate(self::MILESTONE, null);
+            $crit->addUpdate(self::MILESTONE, 0);
             $crit->addUpdate(self::LAST_UPDATED, time());
             $crit->addWhere(self::MILESTONE, $milestone_id);
             $this->doUpdate($crit);
@@ -576,7 +577,7 @@
             $crit->addSelectionColumn(self::ID, 'id');
             $crit->addSelectionColumn(self::LAST_UPDATED, 'last_updated');
             $crit->addWhere(self::PROJECT_ID, $project_id);
-            $crit->addWhere(self::MILESTONE, $milestone_id, Criteria::DB_NOT_EQUALS);
+            $crit->addWhere(self::MILESTONE, $milestone_id, Criteria::DB_EQUALS);
             $crit->addWhere(self::LAST_UPDATED, $last_updated, Criteria::DB_GREATER_THAN_EQUAL);
 
             $res = $this->doSelect($crit);
@@ -704,10 +705,23 @@
                             $crit3->addOrderBy(self::ASSIGNEE_TEAM);
                             $crit3->addOrderBy(self::ASSIGNEE_USER, $grouporder);
                             break;
+                        case 'posted_by':
+                            $crit->addJoin(Users::getTable(), Users::ID, self::POSTED_BY);
+                            $crit3->addJoin(Users::getTable(), Users::ID, self::POSTED_BY);
+                            $crit->addSelectionColumn(self::POSTED_BY);
+                            $crit->addSelectionColumn(Users::UNAME);
+                            $crit->addOrderBy(Users::UNAME, $grouporder);
+                            $crit3->addOrderBy(Users::UNAME, $grouporder);
+                            break;
                         case 'state':
                             $crit->addSelectionColumn(self::STATE);
                             $crit->addOrderBy(self::STATE, $grouporder);
                             $crit3->addOrderBy(self::STATE, $grouporder);
+                            break;
+                        case 'posted':
+                            $crit->addSelectionColumn(self::POSTED);
+                            $crit->addOrderBy(self::POSTED, $grouporder);
+                            $crit3->addOrderBy(self::POSTED, $grouporder);
                             break;
                         case 'severity':
                             $crit->addJoin(ListTypes::getTable(), ListTypes::ID, self::SEVERITY);
@@ -895,6 +909,20 @@
             return $this->selectOne($crit);
         }
 
+        public function getNextIssueFromIssueMilestoneOrderAndMilestoneID($milestone_order, $milestone_id, $only_open = false)
+        {
+            $crit = $this->getCriteria();
+            $crit->addWhere(self::MILESTONE_ORDER, $milestone_order, Criteria::DB_GREATER_THAN);
+            $crit->addWhere(self::MILESTONE, $milestone_id);
+            $crit->addWhere(self::DELETED, false);
+            if ($only_open) $crit->addWhere(self::STATE, \thebuggenie\core\entities\Issue::STATE_OPEN);
+
+            $crit->addOrderBy(self::MILESTONE_ORDER, Criteria::SORT_ASC);
+            $crit->addOrderBy(self::ID, Criteria::SORT_ASC);
+
+            return $this->selectOne($crit);
+        }
+
         public function getPreviousIssueFromIssueIDAndProjectID($issue_id, $project_id, $only_open = false)
         {
             $crit = $this->getCriteria();
@@ -908,6 +936,20 @@
             return $this->selectOne($crit);
         }
 
+        public function getPreviousIssueFromIssueMilestoneOrderAndMilestoneID($milestone_order, $milestone_id, $only_open = false)
+        {
+            $crit = $this->getCriteria();
+            $crit->addWhere(self::MILESTONE_ORDER, $milestone_order, Criteria::DB_LESS_THAN);
+            $crit->addWhere(self::MILESTONE, $milestone_id);
+            $crit->addWhere(self::DELETED, false);
+            if ($only_open) $crit->addWhere(self::STATE, \thebuggenie\core\entities\Issue::STATE_OPEN);
+
+            $crit->addOrderBy(self::MILESTONE_ORDER, Criteria::SORT_DESC);
+            $crit->addOrderBy(self::ID, Criteria::SORT_DESC);
+
+            return $this->selectOne($crit);
+        }
+
         public function fixHours($issue_id)
         {
             $times = IssueSpentTimes::getTable()->getSpentTimeSumsByIssueId($issue_id);
@@ -916,10 +958,10 @@
             $this->doUpdateById($crit, $issue_id);
         }
 
-        public function touchIssue($issue_id)
+        public function touchIssue($issue_id, $last_updated = null)
         {
             $crit = $this->getCriteria();
-            $crit->addUpdate(self::LAST_UPDATED, time());
+            $crit->addUpdate(self::LAST_UPDATED, isset($last_updated) ? $last_updated : time());
             $this->doUpdateById($crit, $issue_id);
         }
 

@@ -117,20 +117,6 @@ switch_back_user:
     parameters: [ ]
     csrf_enabled: false
 
-login:
-    route: /do/login
-    module: main
-    action: doLogin
-    parameters: [ ]
-    csrf_enabled: false
-
-login_page:
-    route: /login
-    module: main
-    action: login
-    parameters: [ ]
-    csrf_enabled: false
-
 elevated_login:
     route: /do/relogin
     module: main
@@ -152,34 +138,6 @@ login_section:
     parameters: [ ]
     csrf_enabled: false
 
-register:
-    route: /do/register
-    module: main
-    action: register
-    parameters: [ ]
-    csrf_enabled: false
-
-register_check_username:
-    route: /check/username
-    module: main
-    action: registerCheckUsernameAvailability
-    parameters: [ ]
-    csrf_enabled: false
-
-activate:
-    route: /activate/:user/:key
-    module: main
-    action: activate
-    parameters: [ ]
-    csrf_enabled: false
-
-reset_password:
-    route: /reset/password/:user/:reset_hash
-    module: main
-    action: reset
-    parameters: [ ]
-    csrf_enabled: false
-
 set_state:
     route: /set/state/:state_id
     module: main
@@ -190,7 +148,7 @@ set_state:
 logout:
     route: /logout
     module: main
-    action: logout
+    action: Common::logout
     parameters: [ ]
     csrf_enabled: false
 
@@ -232,14 +190,7 @@ get_temp_identifiable:
 about:
     route: /about
     module: main
-    action: about
-    parameters: [ ]
-    csrf_enabled: false
-
-get_partial_for_backdrop:
-    route: '/get/partials/:key/*'
-    module: main
-    action: getBackdropPartial
+    action: Common::about
     parameters: [ ]
     csrf_enabled: false
 
@@ -513,13 +464,6 @@ move_issue:
     parameters: [ ]
     csrf_enabled: false
 
-captcha:
-    route: '/captcha/*'
-    module: main
-    action: captcha
-    parameters: [ ]
-    csrf_enabled: false
-
 viewissue_find_issue:
     route: /:project_key/findissues/:issue_id/:type
     module: main
@@ -540,6 +484,13 @@ viewissue_remove_related_issue:
     route: /:project_key/issues/:issue_id/remove/related/issue/:related_issue_id
     module: main
     action: removeRelatedIssue
+    parameters: [ ]
+    csrf_enabled: false
+
+viewissue_remove_duplicated_issue:
+    route: /:project_key/issues/:issue_id/remove/duplicated/issue/:duplicated_issue_id
+    module: main
+    action: removeDuplicatedIssue
     parameters: [ ]
     csrf_enabled: false
 
@@ -696,3 +647,39 @@ issue_moreactions:
     action: issueMoreactions
     parameters: [ ]
     csrf_enabled: false
+
+asset_js:
+    route: '/js/:theme_name/:js'
+    module: main
+    action: Asset::resolve
+    anonymous_route: true
+
+asset_module_js:
+    route: '/js/module/:module_name/:js'
+    module: main
+    action: Asset::resolve
+    anonymous_route: true
+
+asset_css:
+    route: '/css/:theme_name/:css'
+    module: main
+    action: Asset::resolve
+    anonymous_route: true
+
+asset_module_css:
+    route: '/css/modules/:module_name/:css'
+    module: main
+    action: Asset::resolve
+    anonymous_route: true
+
+asset_css_unthemed:
+    route: '/css/:css'
+    module: main
+    action: Asset::resolve
+    anonymous_route: true
+
+asset_js_unthemed:
+    route: '/js/:js'
+    module: main
+    action: Asset::resolve
+    anonymous_route: true

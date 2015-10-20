@@ -63,12 +63,12 @@
                 framework\Event::listen('core', 'breadcrumb_main_links', array($this, 'listen_BreadcrumbMainLinks'));
                 framework\Event::listen('core', 'breadcrumb_project_links', array($this, 'listen_BreadcrumbProjectLinks'));
             }
-            framework\Event::listen('core', '\thebuggenie\core\entities\Project::_postSave', array($this, 'listen_createNewProject'));
-            framework\Event::listen('core', '\thebuggenie\core\entities\File::hasAccess', array($this, 'listen_fileHasAccess'));
-            framework\Event::listen('core', '\thebuggenie\core\entities\User::__getStarredArticles', array($this, '\thebuggenie\core\entities\User__getStarredArticles'));
-            framework\Event::listen('core', '\thebuggenie\core\entities\User::__isArticleStarred', array($this, '\thebuggenie\core\entities\User__isArticleStarred'));
-            framework\Event::listen('core', '\thebuggenie\core\entities\User::__addStarredArticle', array($this, '\thebuggenie\core\entities\User__addStarredArticle'));
-            framework\Event::listen('core', '\thebuggenie\core\entities\User::__removeStarredArticle', array($this, '\thebuggenie\core\entities\User__removeStarredArticle'));
+            framework\Event::listen('core', 'thebuggenie\core\entities\Project::_postSave', array($this, 'listen_createNewProject'));
+            framework\Event::listen('core', 'thebuggenie\core\entities\File::hasAccess', array($this, 'listen_fileHasAccess'));
+            framework\Event::listen('core', 'thebuggenie\core\entities\User::__getStarredArticles', array($this, 'User__getStarredArticles'));
+            framework\Event::listen('core', 'thebuggenie\core\entities\User::__isArticleStarred', array($this, 'User__isArticleStarred'));
+            framework\Event::listen('core', 'thebuggenie\core\entities\User::__addStarredArticle', array($this, 'User__addStarredArticle'));
+            framework\Event::listen('core', 'thebuggenie\core\entities\User::__removeStarredArticle', array($this, 'User__removeStarredArticle'));
             framework\Event::listen('core', 'upload', array($this, 'listen_upload'));
             framework\Event::listen('core', 'quicksearch_dropdown_firstitems', array($this, 'listen_quicksearchDropdownFirstItems'));
             framework\Event::listen('core', 'quicksearch_dropdown_founditems', array($this, 'listen_quicksearchDropdownFoundItems'));
@@ -184,7 +184,6 @@
             if (framework\Context::getScope()->getID() == 1)
             {
                 Articles::getTable()->drop();
-                tables\BillboardPosts::getTable()->drop();
             }
             Links::getTable()->removeByTargetTypeTargetIDandLinkID('wiki', 0);
             parent::_uninstall();
@@ -336,12 +335,12 @@
 
         public function listen_rolePermissionsEdit(framework\Event $event)
         {
-            framework\ActionComponent::includeComponent('configuration/rolepermissionseditlist', array('role' => $event->getSubject(), 'permissions_list' => $this->_getPermissionslist(), 'module' => 'publish', 'target_id' => '%project_key'));
+            framework\ActionComponent::includeComponent('configuration/rolepermissionseditlist', array('role' => $event->getSubject(), 'permissions_list' => $this->_getPermissionslist(), 'module' => 'publish', 'target_id' => '%project_key%'));
         }
 
         public function listen_BreadcrumbMainLinks(framework\Event $event)
         {
-            $link = array('url' => framework\Context::getRouting()->generate('publish'), 'title' => $this->getMenuTitle(framework\Context::isProjectContext()));
+            $link = array('url' => framework\Context::getRouting()->generate('publish'), 'title' => $this->getMenuTitle(false));
             $event->addToReturnList($link);
         }
 
@@ -426,13 +425,14 @@
                 foreach ($namespaces as $namespace)
                 {
                     $composite_ns .= ($composite_ns != '') ? ":{$namespace}" : $namespace;
-                    if ($user->hasPermission($permission_name, $composite_ns, 'publish'))
+                    $retval = $user->hasPermission($permission_name, $composite_ns, 'publish');
+                    if ($retval !== null)
                     {
-                        return true;
+                        return $retval;
                     }
                 }
             }
-            $permissive = ($permission_name == self::PERMISSION_READ_ARTICLE) ? true : $permissive;
+            $permissive = ($permission_name == self::PERMISSION_READ_ARTICLE) ? false : $permissive;
             $retval = $user->hasPermission($permission_name, 0, 'publish');
             return ($retval !== null) ? $retval : $permissive;
         }
@@ -468,11 +468,11 @@
         /**
          * Populate the array of starred articles
          */
-        protected function TBGUser__populateStarredArticles(User $user)
+        protected function User__populateStarredArticles(User $user)
         {
             if ($user->_isset('publish', 'starredarticles') === null)
             {
-                $articles = tables\UserArticles::getTable()->getUserStarredArticles($user->getID());
+                $articles = UserArticles::getTable()->getUserStarredArticles($user->getID());
                 $user->_store('publish', 'starredarticles', $articles);
             }
         }
@@ -482,10 +482,10 @@
          *
          * @return array
          */
-        public function TBGUser__getStarredArticles(framework\Event $event)
+        public function User__getStarredArticles(framework\Event $event)
         {
             $user = $event->getSubject();
-            $this->TBGUser__populateStarredArticles($user);
+            $this->User__populateStarredArticles($user);
             $event->setProcessed();
             $event->setReturnValue($user->_retrieve('publish', 'starredarticles'));
             return;
@@ -496,7 +496,7 @@
          *
          * @return boolean
          */
-        public function TBGUser__isArticleStarred(framework\Event $event)
+        public function User__isArticleStarred(framework\Event $event)
         {
             $user = $event->getSubject();
             $arguments = $event->getParameters();
@@ -511,7 +511,7 @@
             else
             {
                 $event->setProcessed();
-                $event->setReturnValue(tables\UserArticles::getTable()->hasStarredArticle($user->getID(), $article_id));
+                $event->setReturnValue(UserArticles::getTable()->hasStarredArticle($user->getID(), $article_id));
                 return;
             }
         }
@@ -521,21 +521,21 @@
          *
          * @return boolean
          */
-        public function TBGUser__addStarredArticle(framework\Event $event)
+        public function User__addStarredArticle(framework\Event $event)
         {
             $user = $event->getSubject();
             $arguments = $event->getParameters();
             $article_id = $arguments[0];
             if ($user->isLoggedIn() && !$user->isGuest())
             {
-                if (tables\UserArticles::getTable()->hasStarredArticle($user->getID(), $article_id))
+                if (UserArticles::getTable()->hasStarredArticle($user->getID(), $article_id))
                 {
                     $event->setProcessed();
                     $event->setReturnValue(true);
                     return;
                 }
 
-                tables\UserArticles::getTable()->addStarredArticle($user->getID(), $article_id);
+                UserArticles::getTable()->addStarredArticle($user->getID(), $article_id);
                 if ($user->_isset('publish', 'starredarticles'))
                 {
                     $article = Articles::getTable()->selectById($article_id);
@@ -558,12 +558,12 @@
          *
          * @param framework\Event $event
          */
-        public function TBGUser__removeStarredArticle(framework\Event $event)
+        public function User__removeStarredArticle(framework\Event $event)
         {
             $user = $event->getSubject();
             $arguments = $event->getParameters();
             $article_id = $arguments[0];
-            tables\UserArticles::getTable()->removeStarredArticle($user->getID(), $article_id);
+            UserArticles::getTable()->removeStarredArticle($user->getID(), $article_id);
             if (isset($user->_starredarticles))
             {
                 $articles = $user->_retrieve('publish', 'starredarticles');

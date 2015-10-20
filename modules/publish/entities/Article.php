@@ -2,6 +2,8 @@
 
     namespace thebuggenie\modules\publish\entities;
 
+    use thebuggenie\core\entities\Comment;
+    use thebuggenie\core\entities\Notification;
     use \thebuggenie\core\framework,
         \thebuggenie\core\entities\File,
         \thebuggenie\core\entities\Project,
@@ -101,7 +103,7 @@
          * Child article, if this article has any
          *
          * @var array|\thebuggenie\modules\publish\entities\Article
-         * @Relates(class="\thebuggenie\modules\publish\entities\Article", collection=true, foreign_column="parent_article_id")
+         * @Relates(class="\thebuggenie\modules\publish\entities\Article", collection=true, foreign_column="parent_article_id", orderby="name")
          */
         protected $_child_articles = null;
 
@@ -158,6 +160,8 @@
          * @Relates(class="\thebuggenie\core\entities\User", collection=true, manytomany=true, joinclass="\thebuggenie\modules\publish\entities\tables\UserArticles")
          */
         protected $_subscribers = null;
+
+        protected $_parser = null;
 
         /**
          * Article constructor
@@ -258,26 +262,7 @@
 
         public function getParsedContent($options = array())
         {
-            switch ($this->_content_syntax)
-            {
-                case framework\Settings::SYNTAX_MD:
-                    $parser = new \thebuggenie\core\helpers\TextParserMarkdown();
-                    $text = $parser->transform($this->_content);
-                    break;
-                case framework\Settings::SYNTAX_PT:
-                    $options = array('plain' => true);
-                case framework\Settings::SYNTAX_MW:
-                default:
-                    $wiki_parser = new \thebuggenie\core\helpers\TextParser($this->_content, true, $this->getID());
-                    foreach ($options as $option => $value)
-                    {
-                        $wiki_parser->setOption($option, $value);
-                    }
-                    $text = $wiki_parser->getParsedText();
-                    break;
-            }
-
-            return $text;
+            return $this->_parseContent($options);
         }
 
         public function setContentSyntax($syntax)
@@ -428,7 +413,7 @@
 
         protected function _retrieveLinksAndCategoriesFromContent($options = array())
         {
-            $parser = new \thebuggenie\core\helpers\TextParser(html_entity_decode($this->_content));
+            $parser = new \thebuggenie\core\helpers\TextParser($this->_content);
             $options['no_code_highlighting'] = true;
             $parser->doParse($options);
             return array($parser->getInternalLinks(), $parser->getCategories());
@@ -548,6 +533,17 @@
             tables\ArticleLinks::getTable()->deleteLinksByArticle($this->_name);
             ArticleCategories::getTable()->deleteCategoriesByArticle($this->_name);
 
+            if ($this->getArticleType() == self::TYPE_MANUAL && isset($options['article_prev_name']) && $this->_name != $options['article_prev_name'])
+            {
+                $manual_articles = Articles::getTable()->getManualSidebarArticles(framework\Context::getCurrentProject(), $options['article_prev_name']);
+
+                foreach ($manual_articles as $manual_article)
+                {
+                    $manual_article->setName(str_replace($options['article_prev_name'], $this->_name, $manual_article->getName()));
+                    $manual_article->doSave();
+                }
+            }
+
             $this->save();
 
             $this->_old_content = $this->_content;
@@ -575,7 +571,7 @@
 
             $this->_history = null;
 
-            \thebuggenie\core\framework\Event::createNew('core', '\thebuggenie\modules\publish\entities\Article::doSave', $this, compact('reason', 'revision', 'user_id'))->trigger();
+            \thebuggenie\core\framework\Event::createNew('core', 'thebuggenie\modules\publish\entities\Article::doSave', $this, compact('reason', 'revision', 'user_id'))->trigger();
 
             return true;
         }
@@ -725,7 +721,7 @@
         {
             foreach ($this->getFiles() as $file_id => $file)
             {
-                if (mb_strtolower($filename) == mb_strtolower($file->getOriginalFilename()))
+                if (mb_strtolower($filename) == mb_strtolower($file->getRealFilename()) || mb_strtolower($filename) == mb_strtolower($file->getOriginalFilename()))
                 {
                     return $file;
                 }
@@ -844,7 +840,7 @@
          */
         public function setName($name)
         {
-            $this->_name = preg_replace("/[^A-Za-z0-9 :]/", '', $name);
+            $this->_name = preg_replace('/[^\p{L}\p{N} :]/u', '', $name);
         }
 
         /**
@@ -921,6 +917,104 @@
         public function addSubscriber($user_id)
         {
             tables\UserArticles::getTable()->addStarredArticle($user_id, $this->getID());
+        }
+
+        protected function _postSave($is_new)
+        {
+            if ($is_new)
+            {
+                if ($this->_getParser()->hasMentions())
+                {
+                    foreach ($this->_getParser()->getMentions() as $user)
+                    {
+                        if ($user->getID() == framework\Context::getUser()->getID()) continue;
+                        $this->_addNotification(Notification::TYPE_ARTICLE_MENTIONED, $user, $this->getAuthor());
+                    }
+                }
+            }
+        }
+
+        protected function _addNotification($type, $user, $updated_by)
+        {
+            $notification = new Notification();
+            $notification->setTarget($this);
+            $notification->setNotificationType($type);
+            $notification->setTriggeredByUser($updated_by);
+            $notification->setUser($user);
+            $notification->save();
+        }
+
+        protected function _parseContent($options = array())
+        {
+            switch ($this->_content_syntax)
+            {
+                case framework\Settings::SYNTAX_MD:
+                    $parser = new \thebuggenie\core\helpers\TextParserMarkdown();
+                    $text = $parser->transform($this->_content);
+                    break;
+                case framework\Settings::SYNTAX_PT:
+                    $options = array('plain' => true);
+                case framework\Settings::SYNTAX_MW:
+                default:
+                    $parser = new \thebuggenie\core\helpers\TextParser($this->_content, true, $this->getID());
+                    foreach ($options as $option => $value)
+                    {
+                        $parser->setOption($option, $value);
+                    }
+                    $text = $parser->getParsedText();
+                    break;
+            }
+
+            if (isset($parser))
+            {
+                $this->_parser = $parser;
+            }
+            return $text;
+        }
+
+        /**
+         * Returns the associated parser object
+         *
+         * @return \thebuggenie\core\helpers\ContentParser
+         */
+        protected function _getParser()
+        {
+            if (!isset($this->_parser))
+            {
+                $this->_parseContent();
+            }
+            return $this->_parser;
+        }
+
+        public function hasMentions()
+        {
+            return $this->_getParser()->hasMentions();
+        }
+
+        public function getMentions()
+        {
+            return $this->_getParser()->getMentions();
+        }
+
+        public function getMentionedUsers()
+        {
+            $users = array();
+            if ($this->hasMentions())
+            {
+                foreach ($this->getMentions() as $user)
+                {
+                    $users[$user->getID()] = $user;
+                }
+            }
+            foreach (Comment::getComments($this->getID(), Comment::TYPE_ARTICLE) as $comment)
+            {
+                foreach ($comment->getMentions() as $user)
+                {
+                    $users[$user->getID()] = $user;
+                }
+            }
+
+            return $users;
         }
 
     }

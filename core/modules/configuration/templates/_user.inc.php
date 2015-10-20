@@ -6,7 +6,7 @@
 ?>
 <table style="clear: both; width: 700px; margin-top: 5px;" class="padded_table" cellpadding=0 cellspacing=0>
     <tr>
-        <td><label for="requirelogin"><?php echo __('Require re-authentication'); ?></label></td>
+        <td><label for="disableelevatedlogin"><?php echo __('Require re-authentication'); ?></label></td>
         <td>
             <select name="<?php echo \thebuggenie\core\framework\Settings::SETTING_ELEVATED_LOGIN_DISABLED; ?>" id="disableelevatedlogin" style="width: 400px;"<?php if ($access_level != \thebuggenie\core\framework\Settings::ACCESS_FULL): ?> disabled<?php endif; ?>>
                 <option value=0<?php if (\thebuggenie\core\framework\Settings::isElevatedLoginRequired()): ?> selected<?php endif; ?>><?php echo __('You need to re-enter your password to access the configuration section'); ?></option>
@@ -52,6 +52,18 @@
                 "<br><br><i>" .
                 __("Some permissions, such as configuration access are not affected by this setting, but must always be explicitly defined").
                 "</i>"
+            ); ?>
+        </td>
+    </tr>
+    <tr>
+        <td><label for="displayname_format"><?php echo __('User\'s display name format'); ?></label></td>
+        <td>
+            <select name="<?php echo \thebuggenie\core\framework\Settings::SETTING_USER_DISPLAYNAME_FORMAT; ?>" id="displayname_format" style="width: 400px;"<?php if ($access_level != \thebuggenie\core\framework\Settings::ACCESS_FULL): ?> disabled<?php endif; ?>>
+                <option value=1<?php if (\thebuggenie\core\framework\Settings::getUserDisplaynameFormat() == 1): ?> selected<?php endif; ?>><?php echo __('Use user\'s real name instead of buddy name'); ?></option>
+                <option value=0<?php if (\thebuggenie\core\framework\Settings::getUserDisplaynameFormat() == 0): ?> selected<?php endif; ?>><?php echo __('Prefer buddy name instead of real name.'); ?></option>
+            </select>
+            <?php echo config_explanation(
+                __('Change here how user\'s name is displayed.')
             ); ?>
         </td>
     </tr>
@@ -149,36 +161,6 @@
                 <?php foreach ($return_routes as $route => $description): ?> 
                     <option value="<?php echo $route; ?>"<?php if (\thebuggenie\core\framework\Settings::getLogoutReturnRoute() == $route): ?> selected<?php endif; ?>><?php echo $description; ?></option>
                 <?php endforeach; ?>
-            </select>
-        </td>
-    </tr>
-    <tr>
-        <td><label for="onlinestate"><?php echo __('User state when online'); ?></label></td>
-        <td>
-            <select name="<?php echo \thebuggenie\core\framework\Settings::SETTING_ONLINESTATE; ?>" id="onlinestate" style="width: 400px;"<?php if ($access_level != \thebuggenie\core\framework\Settings::ACCESS_FULL): ?> disabled<?php endif; ?>>
-            <?php foreach ($userstates as $userstate): ?>
-                <option value="<?php print $userstate->getID(); ?>"<?php if ($onlinestate instanceof \thebuggenie\core\entities\Userstate && $onlinestate->getID() == $userstate->getID()): ?> selected<?php endif; ?>><?php print $userstate->getName(); ?></option>
-            <?php endforeach; ?>
-            </select>
-        </td>
-    </tr>
-    <tr>
-        <td><label for="awaystate"><?php echo __('User state when inactive'); ?></label></td>
-        <td>
-            <select name="<?php echo \thebuggenie\core\framework\Settings::SETTING_AWAYSTATE; ?>" id="awaystate" style="width: 400px;"<?php if ($access_level != \thebuggenie\core\framework\Settings::ACCESS_FULL): ?> disabled<?php endif; ?>>
-            <?php foreach ($userstates as $userstate): ?>
-                <option value="<?php print $userstate->getID(); ?>"<?php if ($awaystate instanceof \thebuggenie\core\entities\Userstate && $awaystate->getID() == $userstate->getID()): ?> selected<?php endif; ?>><?php print $userstate->getName(); ?></option>
-            <?php endforeach; ?>
-            </select>
-        </td>
-    </tr>
-    <tr>
-        <td><label for="offlinestate"><?php echo __('User state when offline'); ?></label></td>
-        <td>
-            <select name="<?php echo \thebuggenie\core\framework\Settings::SETTING_OFFLINESTATE; ?>" id="offlinestate" style="width: 400px;"<?php if ($access_level != \thebuggenie\core\framework\Settings::ACCESS_FULL): ?> disabled<?php endif; ?>>
-            <?php foreach ($userstates as $userstate): ?>
-                <option value="<?php print $userstate->getID(); ?>"<?php if ($offlinestate instanceof \thebuggenie\core\entities\Userstate && $offlinestate->getID() == $userstate->getID()): ?> selected<?php endif; ?>><?php print $userstate->getName(); ?></option>
-            <?php endforeach; ?>
             </select>
         </td>
     </tr>

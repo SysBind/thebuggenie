@@ -144,7 +144,7 @@
          * List of components for this project
          *
          * @var array|Component
-         * @Relates(class="\thebuggenie\core\entities\Component", collection=true, foreign_column="project")
+         * @Relates(class="\thebuggenie\core\entities\Component", collection=true, foreign_column="project", orderby="name")
          */
         protected $_components = null;
 
@@ -743,7 +743,7 @@
                 framework\Context::setPermission("canaddextrainformationtoissues", $this->getID(), "core", framework\Context::getUser()->getID(), 0, 0, true);
                 framework\Context::setPermission("canpostseeandeditallcomments", $this->getID(), "core", framework\Context::getUser()->getID(), 0, 0, true);
 
-                framework\Event::createNew('core', 'Project::_postSave', $this)->trigger();
+                framework\Event::createNew('core', 'thebuggenie\core\entities\Project::_postSave', $this)->trigger();
             }
             if ($this->_dodelete)
             {
@@ -1404,10 +1404,12 @@
             }
             if ($role instanceof \thebuggenie\core\entities\Role)
             {
+                $role_id = $role->getID();
                 foreach ($role->getPermissions() as $role_permission)
                 {
-                    $target_id = ($role_permission->hasTargetID()) ? $role_permission->getReplacedTargetID($this) : $this->getID();
-                    framework\Context::setPermission($role_permission->getPermission(), $target_id, $role_permission->getModule(), $user_id, 0, $team_id, true, null, $role->getID());
+                    $target_id = strtolower($role_permission->getExpandedTargetID($role));
+                    tables\Permissions::getTable()->removeSavedPermission($user_id, 0, $team_id, $role_permission->getModule(), $role_permission->getPermission(), $target_id, framework\Context::getScope()->getID(), $role_id);
+                    framework\Context::setPermission($role_permission->getPermission(), $target_id, $role_permission->getModule(), $user_id, 0, $team_id, true, null, $role_id);
                 }
             }
         }
@@ -2093,36 +2095,42 @@
             return ($this->getFrontpageSummaryType() == 'issuelist') ? true : false;
         }
 
-        public function getOpenIssuesForFrontpageSummary($merged = false)
+        public function getOpenIssuesSearchForFrontpageSummary()
         {
-            $res = tables\Issues::getTable()->getOpenIssuesByProjectIDAndIssueTypes($this->getID(), array_keys($this->getVisibleIssuetypes()), tables\Issues::ISSUE_TYPE);
-
-            $retval = array();
-            if (!$merged)
-            {
-                foreach ($this->getVisibleIssuetypes() as $issuetype_id => $issuetype)
-                {
-                    $retval[$issuetype_id] = array('issuetype' => $issuetype, 'issues' => array());
-                }
-            }
-            if ($res)
-            {
-                while ($row = $res->getNextRow())
-                {
-                    $issue = new \thebuggenie\core\entities\Issue($row->get(tables\Issues::ID));
-                    if (!$issue->hasAccess()) continue;
-                    if (!$merged)
-                    {
-                        $retval[$row->get(tables\Issues::ISSUE_TYPE)]['issues'][] = $issue;
-                    }
-                    else
-                    {
-                        $retval[] = $issue;
-                    }
-                }
-            }
-
-            return $retval;
+            $search_object = new SavedSearch();
+            $search_object->setAppliesToProject($this);
+            $issue_type_filter = SearchFilter::createFilter('issuetype', array('value' => array_keys($this->getVisibleIssuetypes())), $search_object);
+            $search_object->setFilter('issuetype', $issue_type_filter);
+            $search_object->setGroupby('issuetype');
+            return $search_object;
+//            $res = tables\Issues::getTable()->getOpenIssuesByProjectIDAndIssueTypes($this->getID(), array_keys($this->getVisibleIssuetypes()), tables\Issues::ISSUE_TYPE);
+//
+//            $retval = array();
+//            if (!$merged)
+//            {
+//                foreach ($this->getVisibleIssuetypes() as $issuetype_id => $issuetype)
+//                {
+//                    $retval[$issuetype_id] = array('issuetype' => $issuetype, 'issues' => array());
+//                }
+//            }
+//            if ($res)
+//            {
+//                while ($row = $res->getNextRow())
+//                {
+//                    $issue = new \thebuggenie\core\entities\Issue($row->get(tables\Issues::ID));
+//                    if (!$issue->hasAccess()) continue;
+//                    if (!$merged)
+//                    {
+//                        $retval[$row->get(tables\Issues::ISSUE_TYPE)]['issues'][] = $issue;
+//                    }
+//                    else
+//                    {
+//                        $retval[] = $issue;
+//                    }
+//                }
+//            }
+//
+//            return $retval;
         }
 
         /**
