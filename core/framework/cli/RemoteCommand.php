@@ -86,7 +86,7 @@
                 {
                     throw new \Exception("Please specify an installation of The Bug Genie to connect to by running the remote:authenticate command first");
                 }
-                $headers .= "Cookie: tbg3_username={$this->_getCurrentRemoteUser()}; tbg3_password={$this->_getCurrentRemotePasswordHash()}\r\n";
+                $headers .= "Cookie: username={$this->_getCurrentRemoteUser()}; api_token={$this->_getCurrentRemotePasswordHash()}\r\n";
             }
 
             $options = array('http' => array('method' => (empty($postdata)) ? 'GET' : 'POST', 'header' => $headers));
@@ -134,12 +134,14 @@
 
         protected function getRemoteURL($route_name, $params = array())
         {
-            $real_params = array_merge(array('api_username' => $this->_getCurrentRemoteUser(), 'api_token' => $this->_getCurrentRemotePasswordHash()), $params);
+            $real_params = array_merge(array('api_username' => $this->_getCurrentRemoteUser()), $params);
             $url = \thebuggenie\core\framework\Context::getRouting()->generate($route_name, $real_params, true);
             $host = $this->_getCurrentRemoteServer();
             if (mb_substr($host, mb_strlen($host) - 2) != '/') $host .= '/';
 
-            return $host . mb_substr($url, 1);
+            $host .= mb_substr($url, 1);
+
+            return $host . (($token = $this->_getCurrentRemotePasswordHash()) == '' ? '' : '?api_token=' . $token);
         }
 
     }

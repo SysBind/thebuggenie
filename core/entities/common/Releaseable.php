@@ -119,7 +119,7 @@
          */
         public function getReleaseDateHour()
         {
-            return date("h", $this->_release_date);
+            return date("H", $this->_release_date);
         }
         
         /**
@@ -140,6 +140,19 @@
         public function getReleaseDateAMPM()
         {
             return date("A", $this->_release_date);
+        }
+        
+        public function toJSON($detailed = true)
+        {
+            $jsonArray = array(
+                'id' => $this->getID(),
+        		'owner' => $this->hasOwner() ? $this->getOwner()->toJSON() : null
+            );
+            if($detailed) {
+        		$jsonArray['released'] = $this->isReleased();
+        		$jsonArray['release_date'] = $this->getReleaseDate();
+            }
+            return $jsonArray;
         }
         
     }

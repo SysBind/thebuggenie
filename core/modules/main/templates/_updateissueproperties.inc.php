@@ -7,11 +7,11 @@
         </div>
         <?php echo $transition->getDescription(); ?>
     </div>
-<?php if (isset($interactive) && $interactive): ?>
+<?php if (isset($interactive) && $interactive && $issue instanceof \thebuggenie\core\entities\Issue): ?>
     <form action="<?php echo make_url('transition_issues', array('project_key' => $project->getKey(), 'transition_id' => $transition->getID())); ?>" method="post" onsubmit="TBG.Search.interactiveWorkflowTransition('<?php echo make_url('transition_issues', array('project_key' => $project->getKey(), 'transition_id' => $transition->getID())); ?>', <?php echo $transition->getID(); ?>, 'workflow_transition_form');return false;" accept-charset="<?php echo \thebuggenie\core\framework\Context::getI18n()->getCharset(); ?>" id="workflow_transition_form">
         <input type="hidden" name="issue_ids[<?php echo $issue->getID(); ?>]" value="<?php echo $issue->getID(); ?>">
 <?php elseif ($issue instanceof \thebuggenie\core\entities\Issue): ?>
-    <form action="<?php echo make_url('transition_issue', array('project_key' => $project->getKey(), 'issue_id' => $issue->getID(), 'transition_id' => $transition->getID())); ?>" method="post" accept-charset="<?php echo \thebuggenie\core\framework\Context::getI18n()->getCharset(); ?>" id="workflow_transition_<?php echo $transition->getID(); ?>_form">
+    <form action="<?php echo make_url('transition_issue', array('project_key' => $project->getKey(), 'issue_id' => $issue->getID(), 'transition_id' => $transition->getID())); ?>" method="post" onsubmit="TBG.Search.nonInteractiveWorkflowTransition()" accept-charset="<?php echo \thebuggenie\core\framework\Context::getI18n()->getCharset(); ?>" id="workflow_transition_<?php echo $transition->getID(); ?>_form">
 <?php else: ?>
         <form action="<?php echo make_url('transition_issues', array('project_key' => $project->getKey(), 'transition_id' => $transition->getID())); ?>" method="post" onsubmit="TBG.Search.bulkWorkflowTransition('<?php echo make_url('transition_issues', array('project_key' => $project->getKey(), 'transition_id' => $transition->getID())); ?>', <?php echo $transition->getID(); ?>);return false;" accept-charset="<?php echo \thebuggenie\core\framework\Context::getI18n()->getCharset(); ?>" id="bulk_workflow_transition_form">
     <?php foreach ($issues as $issue_id => $i): ?>
@@ -49,9 +49,9 @@
                         <label for="viewissue_find_issue_<?php echo $transition->getID(); ?>_input"><?php echo __('Find issue(s)'); ?>&nbsp;</label>
                         <input type="text" name="searchfor" id="viewissue_find_issue_<?php echo $transition->getID(); ?>_input">
                         <input class="button button-blue" type="button" onclick="TBG.Issues.findDuplicate($('duplicate_finder_transition_<?php echo $transition->getID(); ?>').getValue(), <?php echo $transition->getID(); ?>);return false;" value="<?php echo __('Find'); ?>" id="viewissue_find_issue_<?php echo $transition->getID(); ?>_submit">
-                        <?php echo image_tag('spinning_20.gif', array('id' => 'find_issue_'.$transition->getID().'_indicator', 'style' => 'display: none;')); ?><br>
+                        <?php echo image_tag('spinning_20.gif', array('id' => 'viewissue_find_issue_'.$transition->getID().'_indicator', 'style' => 'display: none;')); ?><br>
                         <div id="viewissue_<?php echo $transition->getID(); ?>_duplicate_results"></div>
-                        <input type="hidden" name="transition_duplicate_ulr[<?php echo $transition->getID(); ?>]" id="duplicate_finder_transition_<?php echo $transition->getID(); ?>" value="<?php echo ($issue instanceof \thebuggenie\core\entities\Issue) ? make_url('viewissue_find_issue', array('project_key' => $project->getKey(), 'issue_id' => $issue->getID(), 'type' => 'duplicate')) : make_url('viewissue_find_issue', array('project_key' => $project->getKey(), 'type' => 'duplicate')); ?>">
+                        <input type="hidden" name="transition_duplicate_ulr[<?php echo $transition->getID(); ?>]" id="duplicate_finder_transition_<?php echo $transition->getID(); ?>" value="<?php echo make_url('viewissue_find_duplicated_issue', array('project_key' => $project->getKey(), 'issue_id' => $issue->getID())); ?>">
                         <?php if (!$issue instanceof \thebuggenie\core\entities\Issue): ?>
                         <script type="text/javascript">
                             var transition_id = <?php echo $transition->getID(); ?>;
@@ -165,6 +165,7 @@
                         </li>
                     <?php endif; ?>
                 <?php endif; ?>
+                <?php if ( ! empty($customfields_list)): ?>
                 <?php foreach ($customfields_list as $field => $info): ?>
                     <?php if (($issue instanceof \thebuggenie\core\entities\Issue && ($issue->isUpdateable()) || isset($issues)) && $transition->hasAction(\thebuggenie\core\entities\WorkflowTransitionAction::CUSTOMFIELD_SET_PREFIX.$field) && !$transition->getAction(\thebuggenie\core\entities\WorkflowTransitionAction::CUSTOMFIELD_SET_PREFIX.$field)->hasTargetValue()): ?>
                         <li id="transition_popup_<?php echo $field; ?>_div_<?php echo $transition->getID(); ?>">
@@ -189,6 +190,10 @@
                                         });
                                     });
                                 </script>
+                            <?php elseif ($info['type'] == \thebuggenie\core\entities\CustomDatatype::INPUT_TEXTAREA_SMALL || $info['type'] == \thebuggenie\core\entities\CustomDatatype::INPUT_TEXTAREA_MAIN):
+                                include_component('main/textarea', array('area_name' => $field.'_id', 'target_type' => 'issue', 'target_id' => $issue->getID(), 'area_id' => $field.'_'.$transition->getID(), 'height' => '120px', 'width' => '790px', 'value' => ''));
+                            elseif ($info['type'] == \thebuggenie\core\entities\CustomDatatype::INPUT_TEXT): ?>
+                                <input type="text" name="<?php echo $field; ?>_id" placeholder="<?php echo $info['name'] ?>">
                             <?php else: ?>
                                 <select name="<?php echo $field; ?>_id" id="transition_popup_set_<?php echo $field; ?>_<?php echo $transition->getID(); ?>">
                                     <?php
@@ -220,14 +225,6 @@
                                                     <option value="<?php echo $choice->getID(); ?>"<?php if ($issue instanceof \thebuggenie\core\entities\Issue && $issue->getCustomField($field) instanceof \thebuggenie\core\entities\Edition && $issue->getCustomField($field)->getID() == $choice->getID()): ?> selected<?php endif; ?>><?php echo __($choice->getName()); ?></option>
                                                 <?php endforeach;
                                                 break;
-                                            case \thebuggenie\core\entities\CustomDatatype::INPUT_TEXT:
-                                                ?>
-                                                <input type="text" name="<?php echo $field; ?>_id" placeholder="<?php echo $info['name'] ?>">
-                                                <?php
-                                                break;
-                                            case \thebuggenie\core\entities\CustomDatatype::INPUT_TEXTAREA_SMALL:
-                                                include_component('main/textarea', array('area_name' => $field.'_id', 'target_type' => 'issue', 'target_id' => $issue->getID(), 'area_id' => $field.'_'.$transition->getID(), 'height' => '120px', 'width' => '790px', 'value' => ''));
-                                                break;
                                         }
                                     ?>
                                 </select>
@@ -235,13 +232,14 @@
                         </li>
                     <?php endif; ?>
                 <?php endforeach; ?>
+                <?php endif; ?>
                 <?php if ($transition->hasAction(\thebuggenie\core\entities\WorkflowTransitionAction::ACTION_USER_STOP_WORKING)): ?>
                     <?php if ($issue instanceof \thebuggenie\core\entities\Issue): ?>
                         <li id="transition_popup_stop_working_div_<?php echo $transition->getID(); ?>">
                             <label for="transition_popup_set_stop_working"><?php echo __('Log time spent'); ?></label>
                             <div class="time_logger_summary">
                                 <?php $time_spent = $issue->calculateTimeSpent(); ?>
-                                <input type="radio" name="did" id="transition_popup_set_stop_working_<?php echo $transition->getID(); ?>" value="something" checked onchange="$('transition_popup_set_stop_working_specify_log_div_<?php echo $transition->getID(); ?>').hide();"><label for="transition_popup_set_stop_working_<?php echo $transition->getID(); ?>" class="simple"><?php echo __('Yes'); ?></label>&nbsp;&nbsp;&nbsp;&nbsp;<span class="faded_out"><?php echo __('Adds %hours hour(s), %days day(s) and %weeks week(s)', array('%hours' => $time_spent['hours'], '%days' => $time_spent['days'], '%weeks' => $time_spent['weeks'])); ?></span><br>
+                                <input type="radio" name="did" id="transition_popup_set_stop_working_<?php echo $transition->getID(); ?>" value="something" checked onchange="$('transition_popup_set_stop_working_specify_log_div_<?php echo $transition->getID(); ?>').hide();"><label for="transition_popup_set_stop_working_<?php echo $transition->getID(); ?>" class="simple"><?php echo __('Yes'); ?></label>&nbsp;&nbsp;&nbsp;&nbsp;<span class="faded_out"><?php echo __($issue->getTimeLoggerSomethingSummaryText(), array('%minutes' => $time_spent['minutes'], '%hours' => $time_spent['hours'], '%days' => $time_spent['days'], '%weeks' => $time_spent['weeks'])); ?></span><br>
                                 <input type="radio" name="did" id="transition_popup_set_stop_working_no_log_<?php echo $transition->getID(); ?>" value="nothing" onchange="$('transition_popup_set_stop_working_specify_log_div_<?php echo $transition->getID(); ?>').hide();"><label for="transition_popup_set_stop_working_no_log_<?php echo $transition->getID(); ?>" class="simple"><?php echo __('No'); ?></label><br>
                                 <input type="radio" name="did" id="transition_popup_set_stop_working_specify_log_<?php echo $transition->getID(); ?>" value="this" onchange="$('transition_popup_set_stop_working_specify_log_div_<?php echo $transition->getID(); ?>').show()"><label for="transition_popup_set_stop_working_specify_log_<?php echo $transition->getID(); ?>" class="simple"><?php echo __('Yes, let me specify'); ?></label>
                             </div>
@@ -254,10 +252,12 @@
                         <input type="hidden" name="did" id="transition_popup_set_stop_working_no_log_<?php echo $transition->getID(); ?>" value="nothing">
                     <?php endif; ?>
                 <?php endif; ?>
+                <?php if ($issue instanceof \thebuggenie\core\entities\Issue): ?>
                 <li style="margin-top: 10px;">
                     <label for="transition_popup_comment_body"><?php echo __('Write a comment if you want it to be added'); ?></label><br>
                     <?php include_component('main/textarea', array('area_name' => 'comment_body', 'target_type' => 'issue', 'target_id' => $issue->getID(), 'area_id' => 'transition_popup_comment_body_'.$transition->getID(), 'height' => '120px', 'width' => '790px', 'value' => '')); ?>
                 </li>
+                <?php endif; ?>
             </ul>
             <div style="text-align: right; margin-right: 5px;">
                 <?php echo image_tag('spinning_32.gif', array('style' => 'margin: -3px 0 -3px 5px; display: none;', 'id' => 'transition_working_'.$transition->getID().'_indicator')); ?>

@@ -113,6 +113,9 @@
             }
             else
             {
+                $this->cliEcho("\n");
+                $this->cliEcho("To suppress colour output (useful for automation scripts), set environment variable TBG_NO_COLOR to 1.\n");
+                $this->cliEcho("\n");
                 $this->cliEcho("Below is a list of available commands:\n");
                 $this->cliEcho("Type ");
                 $this->cliEcho(\thebuggenie\core\framework\cli\Command::getCommandLineName() . ' ', 'white', 'bold');
@@ -135,7 +138,7 @@
                         $this->cliEcho(" - {$command->getDescription()}\n");
                     }
 
-                    if (count($commands) > 1 && $module_name == 'remote')
+                    if (count($commands) > 1 && $module_name == 'api')
                     {
                         $this->cliEcho("\nModule commands, use ");
                         $this->cliEcho("module_name:command_name", 'green');

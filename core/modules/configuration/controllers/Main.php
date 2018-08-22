@@ -64,37 +64,38 @@
          */
         public function runCheckUpdates(framework\Request $request)
         {
-            $data = json_decode(file_get_contents('http://www.thebuggenie.com/updatecheck.php'));
-            if (!is_object($data))
+            $latest_version = framework\Context::getLatestAvailableVersionInformation();
+
+            if ($latest_version === null)
             {
                 $this->getResponse()->setHttpStatus(400);
-                return $this->renderJSON(array('title' => framework\Context::getI18n()->__('Failed to check for updates'), 'message' => framework\Context::getI18n()->__('The response from The Bug Genie website was invalid')));
-            }
-
-            $outofdate = false;
-
-            // major
-            if ($data->maj > framework\Settings::getMajorVer())
-            {
-                $outofdate = true;
-            }
-            elseif ($data->min > framework\Settings::getMinorVer() && ($data->maj == framework\Settings::getMajorVer()))
-            {
-                $outofdate = true;
-            }
-            elseif ($data->rev > framework\Settings::getRevision() && ($data->maj == framework\Settings::getMajorVer()) && ($data->min == framework\Settings::getMinorVer()))
-            {
-                $outofdate = true;
-            }
-
-            if (!$outofdate)
-            {
-                return $this->renderJSON(array('uptodate' => true, 'title' => framework\Context::getI18n()->__('The Bug Genie is up to date'), 'message' => framework\Context::getI18n()->__('The latest version is %ver', array('%ver' => $data->nicever))));
+                $uptodate = null;
+                $title = framework\Context::getI18n()->__('Failed to check for updates');
+                $message = framework\Context::getI18n()->__('The response from The Bug Genie website was invalid');
             }
             else
             {
-                return $this->renderJSON(array('uptodate' => false, 'title' => framework\Context::getI18n()->__('The Bug Genie is out of date'), 'message' => framework\Context::getI18n()->__('The latest version is %ver. Update now from www.thebuggenie.com.', array('%ver' => $data->nicever))));
+                $update_available = framework\Context::isUpdateAvailable($latest_version);
+
+                if ($update_available)
+                {
+                    $uptodate = false;
+                    $title = framework\Context::getI18n()->__('The Bug Genie is out of date');
+                    $message = framework\Context::getI18n()->__('The latest version is %ver. Update now from www.thebuggenie.com.', ['%ver' => $latest_version->nicever]);
+                }
+                else
+                {
+                    $uptodate = true;
+                    $title = framework\Context::getI18n()->__('The Bug Genie is up to date');
+                    $message = framework\Context::getI18n()->__('The latest version is %ver', ['%ver' => $latest_version->nicever]);
+                }
             }
+
+            return $this->renderJSON([
+                'uptodate' => $uptodate,
+                'title' => $title,
+                'message' => $message
+            ]);
         }
 
         /**
@@ -108,8 +109,8 @@
             {
                 $this->forward403unless($this->access_level == framework\Settings::ACCESS_FULL);
                 $settings = array(framework\Settings::SETTING_USER_DISPLAYNAME_FORMAT, framework\Settings::SETTING_ENABLE_GRAVATARS, framework\Settings::SETTING_IS_SINGLE_PROJECT_TRACKER,
-                    framework\Settings::SETTING_REQUIRE_LOGIN, framework\Settings::SETTING_ALLOW_REGISTRATION, framework\Settings::SETTING_ALLOW_OPENID, framework\Settings::SETTING_USER_GROUP,
-                    framework\Settings::SETTING_RETURN_FROM_LOGIN, framework\Settings::SETTING_RETURN_FROM_LOGOUT, framework\Settings::SETTING_IS_PERMISSIVE_MODE, framework\Settings::SETTING_ALLOW_PERSONA,
+                    framework\Settings::SETTING_REQUIRE_LOGIN, framework\Settings::SETTING_ALLOW_REGISTRATION, framework\Settings::SETTING_USER_GROUP,
+                    framework\Settings::SETTING_RETURN_FROM_LOGIN, framework\Settings::SETTING_RETURN_FROM_LOGOUT, framework\Settings::SETTING_IS_PERMISSIVE_MODE,
                     framework\Settings::SETTING_REGISTRATION_DOMAIN_WHITELIST, framework\Settings::SETTING_SHOW_PROJECTS_OVERVIEW, framework\Settings::SETTING_KEEP_COMMENT_TRAIL_CLEAN,
                     framework\Settings::SETTING_TBG_NAME, framework\Settings::SETTING_TBG_NAME_HTML, framework\Settings::SETTING_DEFAULT_CHARSET, framework\Settings::SETTING_DEFAULT_LANGUAGE,
                     framework\Settings::SETTING_SERVER_TIMEZONE, framework\Settings::SETTING_SYNTAX_HIGHLIGHT_DEFAULT_LANGUAGE, framework\Settings::SETTING_SYNTAX_HIGHLIGHT_DEFAULT_INTERVAL,
@@ -685,7 +686,7 @@
                     }
                     else
                     {
-                        framework\Context::setMessage('module_error', framework\Context::getI18n()->__('There was an error install the module "%module_name"', array('%module_name' => $request['module_key'])));
+                        framework\Context::setMessage('module_error', framework\Context::getI18n()->__('There was an error during the installation of the module "%module_name"', array('%module_name' => $request['module_key'])));
                     }
                 }
                 else
@@ -777,15 +778,15 @@
         {
             $themes = framework\Context::getThemes();
             if (array_key_exists($request['theme_key'], $themes)) {
-                if (framework\Context::getScope()->isDefault())
-                {
-                    $theme_link_path = THEBUGGENIE_PATH . THEBUGGENIE_PUBLIC_FOLDER_NAME . DS . 'css' . DS . $request['theme_key'];
-                    $theme_path = '..' . DS . '..' . DS . 'themes' . DS . $request['theme_key'] . DS . 'css';
-                    if (file_exists($theme_link_path)) {
-                        unlink($theme_link_path);
-                    }
-                    symlink($theme_path, $theme_link_path);
-                }
+//                if (framework\Context::getScope()->isDefault())
+//                {
+//                    $theme_link_path = THEBUGGENIE_PATH . THEBUGGENIE_PUBLIC_FOLDER_NAME . DS . 'css' . DS . $request['theme_key'];
+//                    $theme_path = '..' . DS . '..' . DS . 'themes' . DS . $request['theme_key'] . DS . 'css';
+//                    if (file_exists($theme_link_path)) {
+//                        unlink($theme_link_path);
+//                    }
+//                    symlink($theme_path, $theme_link_path);
+//                }
                 framework\Settings::saveSetting(framework\Settings::SETTING_THEME_NAME, $request['theme_key']);
                 framework\Context::setMessage('theme_message', $this->getI18n()->__('The theme has been enabled'));
             } else {
@@ -2119,6 +2120,7 @@
                                     case entities\WorkflowTransitionValidationRule::RULE_RESOLUTION_VALID:
                                     case entities\WorkflowTransitionValidationRule::RULE_STATUS_VALID:
                                     case entities\WorkflowTransitionValidationRule::RULE_TEAM_MEMBERSHIP_VALID:
+                                    case entities\WorkflowTransitionValidationRule::RULE_ISSUE_IN_MILESTONE_VALID:
                                         $rule->setRuleValue(join(',', $request['rule_value'] ?: array()));
                                         $text = ($rule->getRuleValue()) ? $rule->getRuleValueAsJoinedString() : $this->getI18n()->__('Any valid value');
                                         break;
@@ -2382,7 +2384,10 @@
             }
             $this->scope_deleted = framework\Context::getMessageAndClear('scope_deleted');
             $this->scope_saved = framework\Context::getMessageAndClear('scope_saved');
-            $this->scopes = entities\Scope::getAll();
+            $pagination_scopes = tables\Scopes::getTable()->getPaginationItems();
+            $pagination = new \thebuggenie\core\helpers\Pagination($pagination_scopes, $this->getRouting()->generate('configure_scopes'), $request);
+            $this->scopes = tables\Scopes::getTable()->getByIds($pagination->getPageItems());
+            $this->pagination = $pagination;
         }
 
         public function runScope(framework\Request $request)

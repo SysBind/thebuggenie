@@ -61,8 +61,6 @@
 
         const SETTING_ADMIN_GROUP = 'admingroup';
         const SETTING_ALLOW_REGISTRATION = 'allowreg';
-        const SETTING_ALLOW_OPENID = 'allowopenid';
-        const SETTING_ALLOW_PERSONA = 'allowpersona';
         const SETTING_ALLOW_USER_THEMES = 'userthemes';
         const SETTING_AWAYSTATE = 'awaystate';
         const SETTING_DEFAULT_CHARSET = 'charset';
@@ -110,6 +108,9 @@
         const SETTING_UPLOAD_STORAGE = 'upload_storage';
         const SETTING_UPLOAD_ALLOW_IMAGE_CACHING = 'upload_allow_image_caching';
         const SETTING_UPLOAD_DELIVERY_USE_XSEND = 'upload_delivery_use_xsend';
+
+        const SETTING_USER_COMMENT_ORDER = 'comment_order';
+
         const SETTING_USER_DISPLAYNAME_FORMAT = 'user_displayname_format';
         const SETTING_USER_GROUP = 'defaultgroup';
         const SETTING_USER_TIMEZONE = 'timezone';
@@ -117,10 +118,25 @@
         const SETTING_USER_LANGUAGE = 'language';
         const SETTING_USER_ACTIVATION_KEY = 'activation_key';
         const SETTING_USER_NOTIFICATION_TIMEOUT = 'notifications_timeout';
+        const SETTING_USER_DESKTOP_NOTIFICATIONS_NEW_TAB = 'desktop_notifications_new_tab';
+
         const SETTINGS_USER_SUBSCRIBE_CREATED_UPDATED_COMMENTED_ISSUES = 'subscribe_posted_updated_commented_issues';
         const SETTINGS_USER_SUBSCRIBE_CREATED_UPDATED_COMMENTED_ARTICLES = 'subscribe_created_updated_commented_articles';
         const SETTINGS_USER_SUBSCRIBE_NEW_ISSUES_MY_PROJECTS = 'subscribe_new_issues_project';
+        const SETTINGS_USER_SUBSCRIBE_NEW_ISSUES_MY_PROJECTS_CATEGORY = 'subscribe_new_issues_project_category';
         const SETTINGS_USER_SUBSCRIBE_NEW_ARTICLES_MY_PROJECTS = 'subscribe_new_articles_project';
+
+        const SETTINGS_USER_NOTIFY_NEW_ISSUES_MY_PROJECTS = 'notify_new_issues_my_projects';
+        const SETTINGS_USER_NOTIFY_NEW_ISSUES_MY_PROJECTS_CATEGORY = 'notify_new_issues_my_projects_category';
+        const SETTINGS_USER_NOTIFY_NEW_ARTICLES_MY_PROJECTS = 'notify_new_articles_my_projects';
+        const SETTINGS_USER_NOTIFY_ITEM_ONCE = 'notify_issue_once';
+        const SETTINGS_USER_NOTIFY_SUBSCRIBED_ISSUES = 'notify_subscribed_issues';
+        const SETTINGS_USER_NOTIFY_SUBSCRIBED_ARTICLES = 'notify_subscribed_articles';
+        const SETTINGS_USER_NOTIFY_UPDATED_SELF = 'notify_updated_self';
+        const SETTINGS_USER_NOTIFY_MENTIONED = 'notify_mentioned';
+        const SETTINGS_USER_NOTIFY_GROUPED_NOTIFICATIONS = 'notify_grouped_notifications';
+        const SETTINGS_USER_NOTIFY_ONLY_IN_BOX_WHEN_ACTIVE = 'notify_only_in_box_when_active';
+
         const SETTING_AUTH_BACKEND = 'auth_backend';
         const SETTING_MAINTENANCE_MODE = 'offline';
         const SETTING_MAINTENANCE_MESSAGE = 'offline_msg';
@@ -132,23 +148,28 @@
         const USER_DISPLAYNAME_FORMAT_BUDDY = 0;
 
         protected static $_ver_mj = 4;
-        protected static $_ver_mn = 1;
-        protected static $_ver_rev = '0';
-        protected static $_ver_name = "Abstract Apricot";
-        protected static $_defaultscope = null;
-        protected static $_settings = null;
+        protected static $_ver_mn = 2;
+        protected static $_ver_rev = 0;
+        protected static $_ver_name = "On the road again";
+        protected static $_defaultscope;
+        protected static $_settings;
 
         /**
          * @var \DateTimeZone
          */
-        protected static $_timezone = null;
+        protected static $_timezone;
 
         protected static $_loadedsettings = array();
 
-        protected static $_core_workflow = null;
+        protected static $_core_workflow;
         protected static $_verified_theme = false;
-        protected static $_core_workflowscheme = null;
-        protected static $_core_issuetypescheme = null;
+        protected static $_core_workflowscheme;
+        protected static $_core_issuetypescheme;
+
+        /**
+         * @var AuthenticationBackend
+         */
+        protected static $_authentication_backend;
 
         public static function forceSettingsReload()
         {
@@ -290,9 +311,23 @@
             return $retvar;
         }
 
+        public static function getUpgradeStatus()
+        {
+            $version_info = explode(',', file_get_contents(THEBUGGENIE_PATH . 'installed'));
+            $current_version = $version_info[0];
+            $upgrade_available = ($current_version != self::getVersion(false));
+
+            return [$current_version, $upgrade_available];
+        }
+
         public static function getUserSetting($user_id, $name, $module = 'core', $scope = null)
         {
             return self::get($name, $module, $scope, $user_id);
+        }
+
+        public static function hasUserSetting($user_id, $name, $module = 'core', $scope = null)
+        {
+            return self::getUserSetting($name, $module, $scope, $user_id) !== null;
         }
 
         public static function saveUserSetting($user_id, $name, $value, $module = 'core', $scope = 0)
@@ -395,36 +430,6 @@
             return (bool) self::get(self::SETTING_ALLOW_REGISTRATION);
         }
 
-        public static function getOpenIDStatus()
-        {
-            $setting = self::get(self::SETTING_ALLOW_OPENID);
-            return ($setting === null) ? 'all' : $setting;
-        }
-
-        public static function isPersonaEnabled()
-        {
-            $setting = self::get(self::SETTING_ALLOW_PERSONA);
-            return ($setting === null) ? true : (bool) $setting;
-        }
-
-        public static function isOpenIDavailable()
-        {
-            if (self::isUsingExternalAuthenticationBackend())
-            {
-                return false; // No openID when using external auth
-            }
-            return (bool) (self::getOpenIDStatus() != 'none');
-        }
-
-        public static function isPersonaAvailable()
-        {
-            if (self::isUsingExternalAuthenticationBackend())
-            {
-                return false; // No openID when using external auth
-            }
-            return (bool) self::isPersonaEnabled();
-        }
-
         public static function getUserDisplaynameFormat()
         {
             $format = self::get(self::SETTING_USER_DISPLAYNAME_FORMAT);
@@ -486,7 +491,7 @@
                 if (!Context::isReadySetup()) return 'The Bug Genie';
                 $name = self::get(self::SETTING_TBG_NAME);
                 if (!self::isHeaderHtmlFormattingAllowed()) $name = htmlspecialchars($name, ENT_COMPAT, Context::getI18n()->getCharset());
-                return $name;
+                return trim($name);
             }
             catch (\Exception $e)
             {
@@ -576,7 +581,7 @@
 
         public static function getDefaultUserID()
         {
-            return self::get(self::SETTING_DEFAULT_USER_ID);
+            return (int) self::get(self::SETTING_DEFAULT_USER_ID);
         }
 
         /**
@@ -588,7 +593,7 @@
         {
             try
             {
-                return \thebuggenie\core\entities\User::getB2DBTable()->selectByID((int) self::get(self::SETTING_DEFAULT_USER_ID));
+                return tables\Users::getTable()->selectByID(self::getDefaultUserID());
             }
             catch (\Exception $e)
             {
@@ -793,12 +798,13 @@
 
         public static function getUploadStorage()
         {
-            return self::get(self::SETTING_UPLOAD_STORAGE);
+            return self::get(self::SETTING_UPLOAD_STORAGE, 'core', self::getDefaultScopeID());
         }
 
         public static function getUploadsLocalpath()
         {
-            return self::get(self::SETTING_UPLOAD_LOCAL_PATH);
+            $path = self::get(self::SETTING_UPLOAD_LOCAL_PATH, 'core', self::getDefaultScopeID());
+            return (substr($path, -1, 1) == DS) ? $path : $path . DS;
         }
 
         public static function isInfoBoxVisible($key)
@@ -851,7 +857,29 @@
             return self::get(self::SETTING_SYNTAX_HIGHLIGHT_DEFAULT_INTERVAL);
         }
 
+        /**
+         * @return AuthenticationBackend
+         * @throws \Exception
+         *
+         */
         public static function getAuthenticationBackend()
+        {
+            if (self::$_authentication_backend === null)
+            {
+                if (self::isUsingExternalAuthenticationBackend())
+                {
+                    self::$_authentication_backend = Context::getModule(self::getAuthenticationBackendIdentifier())->getAuthenticationBackend();
+                }
+                else
+                {
+                    self::$_authentication_backend = new AuthenticationBackend();
+                }
+            }
+
+            return self::$_authentication_backend;
+        }
+
+        public static function getAuthenticationBackendIdentifier()
         {
             return self::get(self::SETTING_AUTH_BACKEND);
         }
@@ -927,7 +955,36 @@
         public static function getNotificationPollInterval()
         {
             $seconds = self::get(self::SETTING_NOTIFICATION_POLL_INTERVAL);
-            return $seconds == null ? 10 : $seconds;
+            return $seconds == null ? 180 : $seconds;
+        }
+
+        public static function getSubscriptionsSettings()
+        {
+            $i18n = Context::getI18n();
+            $subscriptionssettings = array();
+            $subscriptionssettings[self::SETTINGS_USER_SUBSCRIBE_CREATED_UPDATED_COMMENTED_ISSUES] = $i18n->__('Automatically subscribe to issues I posted');
+            $subscriptionssettings[self::SETTINGS_USER_SUBSCRIBE_CREATED_UPDATED_COMMENTED_ARTICLES] = $i18n->__('Automatically subscribe to article I posted');
+            $subscriptionssettings[self::SETTINGS_USER_SUBSCRIBE_NEW_ISSUES_MY_PROJECTS] = $i18n->__('Automatically subscribe to new issues that are created in my project(s)');
+            $subscriptionssettings[self::SETTINGS_USER_SUBSCRIBE_NEW_ARTICLES_MY_PROJECTS] = $i18n->__('Automatically subscribe to new articles that are created in my project(s)');
+            $subscriptionssettings[self::SETTINGS_USER_SUBSCRIBE_NEW_ISSUES_MY_PROJECTS_CATEGORY] = $i18n->__('Automatically subscribe to new issues in selected categories');
+            return $subscriptionssettings;
+        }
+
+        public static function getNotificationSettings()
+        {
+            $i18n = Context::getI18n();
+            $notificationsettings = array();
+            $notificationsettings[self::SETTINGS_USER_NOTIFY_SUBSCRIBED_ISSUES] = $i18n->__('Notify when there are updates to my subscribed issues');
+            $notificationsettings[self::SETTINGS_USER_NOTIFY_SUBSCRIBED_ARTICLES] = $i18n->__('Notify when there are updates to my subscribed articles');
+            $notificationsettings[self::SETTINGS_USER_NOTIFY_NEW_ISSUES_MY_PROJECTS] = $i18n->__('Notify when new issues are created in my project(s)');
+            $notificationsettings[self::SETTINGS_USER_NOTIFY_NEW_ARTICLES_MY_PROJECTS] = $i18n->__('Notify when new articles are created in my project(s)');
+            $notificationsettings[self::SETTINGS_USER_NOTIFY_UPDATED_SELF] = $i18n->__('Notify also when I am the one making the changes');
+            $notificationsettings[self::SETTINGS_USER_NOTIFY_MENTIONED] = $i18n->__('Notify when I am mentioned in issue or article or their comment');
+            $notificationsettings[self::SETTINGS_USER_NOTIFY_ITEM_ONCE] = $i18n->__('Only notify once per issue or article until I view the issue or article in my browser');
+            $notificationsettings[self::SETTINGS_USER_NOTIFY_NEW_ISSUES_MY_PROJECTS_CATEGORY] = $i18n->__('Notify when issues are created in selected categories');
+//            $notificationsettings[self::SETTINGS_USER_NOTIFY_GROUPED_NOTIFICATIONS] = $i18n->__('Show notifications about issue updates that are grouped as one notification based on interval in minutes:');
+//            $notificationsettings[self::SETTINGS_USER_NOTIFY_ONLY_IN_BOX_WHEN_ACTIVE] = $i18n->__("Don't send email notification if I'm currently logged in and active");
+            return $notificationsettings;
         }
 
         /**
@@ -937,7 +994,7 @@
          */
         public static function isUsingExternalAuthenticationBackend()
         {
-            if (self::getAuthenticationBackend() !== null && self::getAuthenticationBackend() !== 'tbg'): return true; else: return false; endif;
+            return (self::getAuthenticationBackendIdentifier() !== null && self::getAuthenticationBackendIdentifier() !== 'tbg');
         }
 
         /**
@@ -1009,27 +1066,33 @@
             $config_sections = array('general' => array(), self::CONFIGURATION_SECTION_MODULES => array());
 
             if (Context::getScope()->getID() == 1)
-                $config_sections['general'][self::CONFIGURATION_SECTION_SCOPES] = array('route' => 'configure_scopes', 'description' => $i18n->__('Scopes'), 'icon' => 'scopes', 'details' => $i18n->__('Scopes are self-contained Bug Genie environments. Configure them here.'));
+                $config_sections['general'][self::CONFIGURATION_SECTION_SCOPES] = array('route' => 'configure_scopes', 'description' => $i18n->__('Scopes'), 'fa_icon' => 'clone', 'details' => $i18n->__('Scopes are self-contained Bug Genie environments. Configure them here.'));
 
-            $config_sections['general'][self::CONFIGURATION_SECTION_SETTINGS] = array('route' => 'configure_settings', 'description' => $i18n->__('Settings'), 'icon' => 'general_small', 'details' => $i18n->__('Every setting in the bug genie can be adjusted in this section.'));
-            $config_sections['general'][self::CONFIGURATION_SECTION_THEMES] = array('route' => 'configuration_themes', 'description' => $i18n->__('Theme'), 'icon' => 'themes', 'details' => $i18n->__('Configure the selected theme from this section'));
-            $config_sections['general'][self::CONFIGURATION_SECTION_ROLES] = array('route' => 'configure_roles', 'description' => $i18n->__('Roles'), 'icon' => 'roles', 'details' => $i18n->__('Configure roles in this section'));
-            $config_sections['general'][self::CONFIGURATION_SECTION_AUTHENTICATION] = array('route' => 'configure_authentication', 'description' => $i18n->__('Authentication'), 'icon' => 'authentication', 'details' => $i18n->__('Configure the authentication method in this section'));
+            $config_sections['general'][self::CONFIGURATION_SECTION_SETTINGS] = array('route' => 'configure_settings', 'description' => $i18n->__('Settings'), 'fa_icon' => 'cog', 'details' => $i18n->__('Every setting in the bug genie can be adjusted in this section.'));
+            $config_sections['general'][self::CONFIGURATION_SECTION_THEMES] = array('route' => 'configuration_themes', 'description' => $i18n->__('Theme'), 'fa_icon' => 'paint-brush', 'details' => $i18n->__('Configure the selected theme from this section'));
+            $config_sections['general'][self::CONFIGURATION_SECTION_ROLES] = array('route' => 'configure_roles', 'description' => $i18n->__('Roles'), 'fa_icon' => 'user-md', 'details' => $i18n->__('Configure roles in this section'));
+            $config_sections['general'][self::CONFIGURATION_SECTION_AUTHENTICATION] = array('route' => 'configure_authentication', 'description' => $i18n->__('Authentication'), 'fa_icon' => 'lock', 'details' => $i18n->__('Configure the authentication method in this section'));
 
             if (Context::getScope()->isUploadsEnabled())
-                $config_sections['general'][self::CONFIGURATION_SECTION_UPLOADS] = array('route' => 'configure_files', 'description' => $i18n->__('Uploads and attachments'), 'icon' => 'files', 'details' => $i18n->__('All settings related to file uploads are controlled from this section.'));
+                $config_sections['general'][self::CONFIGURATION_SECTION_UPLOADS] = array('route' => 'configure_files', 'description' => $i18n->__('Uploads and attachments'), 'fa_icon' => 'upload', 'details' => $i18n->__('All settings related to file uploads are controlled from this section.'));
 
-            $config_sections['general'][self::CONFIGURATION_SECTION_IMPORT] = array('route' => 'import_home', 'description' => $i18n->__('Import data'), 'icon' => 'import_small', 'details' => $i18n->__('Import data from CSV files and other sources.'));
-            $config_sections['general'][self::CONFIGURATION_SECTION_PROJECTS] = array('route' => 'configure_projects', 'description' => $i18n->__('Projects'), 'icon' => 'projects', 'details' => $i18n->__('Set up all projects in this configuration section.'));
-            $config_sections['general'][self::CONFIGURATION_SECTION_ISSUETYPES] = array('route' => 'configure_issuetypes', 'icon' => 'issuetypes', 'description' => $i18n->__('Issue types'), 'details' => $i18n->__('Manage issue types and configure issue fields for each issue type here'));
-            $config_sections['general'][self::CONFIGURATION_SECTION_ISSUEFIELDS] = array('route' => 'configure_issuefields', 'icon' => 'resolutiontypes', 'description' => $i18n->__('Issue fields'), 'details' => $i18n->__('Status types, resolution types, categories, custom fields, etc. are configurable from this section.'));
-            $config_sections['general'][self::CONFIGURATION_SECTION_WORKFLOW] = array('route' => 'configure_workflow', 'icon' => 'workflow', 'description' => $i18n->__('Workflow'), 'details' => $i18n->__('Set up and edit workflow configuration from this section'));
-            $config_sections['general'][self::CONFIGURATION_SECTION_USERS] = array('route' => 'configure_users', 'description' => $i18n->__('Users, teams and clients'), 'icon' => 'users', 'details' => $i18n->__('Manage users, user teams and clients from this section.'));
-            $config_sections['general'][self::CONFIGURATION_SECTION_MODULES] = array('route' => 'configure_modules', 'description' => $i18n->__('Manage modules'), 'icon' => 'modules', 'details' => $i18n->__('Manage Bug Genie extensions from this section. New modules are installed from here.'), 'module' => 'core');
+            $config_sections['general'][self::CONFIGURATION_SECTION_IMPORT] = array('route' => 'import_home', 'description' => $i18n->__('Import data'), 'fa_icon' => 'download', 'details' => $i18n->__('Import data from CSV files and other sources.'));
+            $config_sections['general'][self::CONFIGURATION_SECTION_PROJECTS] = array('route' => 'configure_projects', 'description' => $i18n->__('Projects'), 'fa_icon' => 'code', 'details' => $i18n->__('Set up all projects in this configuration section.'));
+            $config_sections['general'][self::CONFIGURATION_SECTION_ISSUETYPES] = array('route' => 'configure_issuetypes', 'fa_icon' => 'files-o', 'description' => $i18n->__('Issue types'), 'details' => $i18n->__('Manage issue types and configure issue fields for each issue type here'));
+            $config_sections['general'][self::CONFIGURATION_SECTION_ISSUEFIELDS] = array('route' => 'configure_issuefields', 'fa_icon' => 'list', 'description' => $i18n->__('Issue fields'), 'details' => $i18n->__('Status types, resolution types, categories, custom fields, etc. are configurable from this section.'));
+            $config_sections['general'][self::CONFIGURATION_SECTION_WORKFLOW] = array('route' => 'configure_workflow', 'fa_icon' => 'code-fork', 'description' => $i18n->__('Workflow'), 'details' => $i18n->__('Set up and edit workflow configuration from this section'));
+            $config_sections['general'][self::CONFIGURATION_SECTION_USERS] = array('route' => 'configure_users', 'description' => $i18n->__('Users, teams and clients'), 'fa_icon' => 'users', 'details' => $i18n->__('Manage users, user teams and clients from this section.'));
+            $config_sections['general'][self::CONFIGURATION_SECTION_MODULES] = array('route' => 'configure_modules', 'description' => $i18n->__('Manage modules'), 'fa_icon' => 'puzzle-piece', 'details' => $i18n->__('Manage Bug Genie extensions from this section. New modules are installed from here.'), 'module' => 'core');
             foreach (Context::getModules() as $module)
             {
-                if ($module->hasConfigSettings() && $module->isEnabled())
-                    $config_sections[self::CONFIGURATION_SECTION_MODULES][] = array('route' => array('configure_module', array('config_module' => $module->getName())), 'description' => Context::geti18n()->__($module->getConfigTitle()), 'icon' => $module->getName(), 'details' => Context::geti18n()->__($module->getConfigDescription()), 'module' => $module->getName());
+                if ($module->hasConfigSettings() && $module->isEnabled()) {
+                    $module_array = array('route' => array('configure_module', array('config_module' => $module->getName())), 'description' => Context::geti18n()->__($module->getConfigTitle()), 'icon' => $module->getName(), 'details' => Context::geti18n()->__($module->getConfigDescription()), 'module' => $module->getName());
+                    if ($module->hasFontAwesomeIcon()) {
+                        $module_array['fa_icon'] = $module->getFontAwesomeIcon();
+                        $module_array['fa_color'] = $module->getFontAwesomeColor();
+                    }
+                    $config_sections[self::CONFIGURATION_SECTION_MODULES][] = $module_array;
+                }
             }
 
             return $config_sections;

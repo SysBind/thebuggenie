@@ -2,6 +2,7 @@
 
     namespace thebuggenie\core\helpers;
 
+    use Highlight\Highlighter;
     use thebuggenie\core\framework,
         thebuggenie\modules\publish\entities\tables\Articles,
         thebuggenie\modules\publish\entities\Article;
@@ -361,6 +362,10 @@
         {
             $href = html_entity_decode($matches[4], ENT_QUOTES, 'UTF-8');
 
+            // Additional options to set in the tag (i.e. for specifying CSS
+            // class etc).
+            $href_options = [];
+
             if (isset($matches[6]) && $matches[6])
             {
                 $title = $matches[6];
@@ -473,6 +478,7 @@
                     $file = null;
                     $file_link = $filename;
                     $caption = $filename;
+                    $in_email = isset($this->options['in_email']) ? $this->options['in_email'] : false;
 
                     if ($issuemode)
                     {
@@ -486,14 +492,14 @@
                     {
                         $caption = (!empty($options)) ? array_pop($options) : htmlentities($file->getDescription(), ENT_COMPAT, framework\Context::getI18n()->getCharset());
                         $caption = ($caption != '') ? $caption : htmlentities($file->getOriginalFilename(), ENT_COMPAT, framework\Context::getI18n()->getCharset());
-                        $file_link = make_url('showfile', array('id' => $file->getID()));
+                        $file_link = make_url('showfile', array('id' => $file->getID()), !$in_email);
                     }
                     else
                     {
                         $caption = (!empty($options)) ? array_pop($options) : false;
                     }
 
-                    if ((($file instanceof \thebuggenie\core\entities\File && $file->isImage()) || $articlemode) && (mb_strtolower($namespace) == 'image' || $issuemode) && \thebuggenie\core\framework\Settings::isCommentImagePreviewEnabled())
+                    if ((($file instanceof \thebuggenie\core\entities\File && $file->isImage()) || $articlemode) && (mb_strtolower($namespace) == 'image' || $issuemode) && framework\Settings::isCommentImagePreviewEnabled())
                     {
                         $divclasses = array('image_container');
                         $style_dimensions = '';
@@ -531,10 +537,6 @@
                             $divclasses[] = 'icright';
                         }
                         $retval = '<div class="'.join(' ', $divclasses).'"';
-                        if ($issuemode)
-                        {
-                            $retval .= ' style="float: left; clear: left;"';
-                        }
                         $retval .= '>';
                         $retval .= image_tag($file_link, array('alt' => $caption, 'title' => $caption, 'style' => $style_dimensions, 'class' => 'image'), true);
                         if ($caption != '')
@@ -601,6 +603,11 @@
 
                 if (framework\Context::isCLI()) return $href;
 
+                if (!Article::doesArticleExist($href))
+                {
+                    $href_options['class'] = 'missing_wiki_page';
+                }
+
                 $href = framework\Context::getRouting()->generate('publish_article', array('article_name' => $href));
             }
             else
@@ -610,7 +617,7 @@
 
             if (framework\Context::isCLI()) return $href;
 
-            return link_tag($href, $title);
+            return link_tag($href, $title, $href_options);
         }
 
         protected function _parse_externallink($matches)
@@ -691,7 +698,9 @@
 
         public static function parseIssuelink($matches, $markdown_format = false)
         {
-            $theIssue = \thebuggenie\core\entities\Issue::getIssueFromLink($matches[0]);
+            framework\Context::loadLibrary('ui');
+            
+            $theIssue = \thebuggenie\core\entities\Issue::getIssueFromLink($matches[2]);
             $output = '';
             $classname = '';
             if ($theIssue instanceof \thebuggenie\core\entities\Issue && ($theIssue->isClosed() || $theIssue->isDeleted()))
@@ -705,25 +714,38 @@
                 if ($markdown_format) {
                     if ($classname != '') $classname = ' {.'.$classname.'}';
 
-                    $output = "[{$matches[0]}]($theIssueUrl \"{$theIssue->getFormattedTitle()}\")$classname";
+                    $output = "{$matches[1]}[{$matches[2]}]($theIssueUrl \"{$theIssue->getFormattedTitle()}\")$classname";
                 }
                 else {
-                    $output = ' '.link_tag($theIssueUrl, $matches[0], array('class' => $classname, 'title' => $theIssue->getFormattedTitle()));
+                    $output = $matches[1] . link_tag($theIssueUrl, $matches[2], array('class' => $classname, 'title' => $theIssue->getFormattedTitle()));
                 }
             }
             else
             {
-                $output = $matches[0];
+                $output = $matches[1] . $matches[2];
             }
             return $output;
         }
 
         protected function _parse_mention($matches)
         {
-            $user = \thebuggenie\core\entities\tables\Users::getTable()->getByUsername($matches[1]);
+            $matched_user = $matches[1];
+            $use_dot = false;
+
+            if (mb_substr($matched_user, -1) === '.')
+            {
+                $matched_user = mb_substr($matched_user, 0, -1);
+                $use_dot = true;
+            }
+
+            $user = \thebuggenie\core\entities\tables\Users::getTable()->getByUsername($matched_user);
+
             if ($user instanceof \thebuggenie\core\entities\User)
             {
-                $output = framework\Action::returnComponentHTML('main/userdropdown_inline', array('user' => $matches[1], 'in_email' => isset($this->options['in_email']) ? $this->options['in_email'] : false));
+                $output = framework\Action::returnComponentHTML('main/userdropdown_inline', array('user' => $matched_user, 'in_email' => isset($this->options['in_email']) ? $this->options['in_email'] : false));
+
+                if ($use_dot) $output .= '.';
+
                 $this->mentions[$user->getID()] = $user;
             }
             else
@@ -801,7 +823,7 @@
                     return (isset($this->options['included'])) ? '' : '{{TOC}}';
                 case 'SITENAME':
                 case 'SITETAGLINE':
-                    return \thebuggenie\core\framework\Settings::getSiteHeaderName();
+                    return framework\Settings::getSiteHeaderName();
                 default:
                     $details = explode('|', $matches[1]);
                     $template_name = array_shift($details);
@@ -1040,7 +1062,9 @@
             $char_regexes[] = array('/(?<=\s|^)(\:\(|\:-\(|\:\)|\:-\)|8\)|8-\)|B\)|B-\)|\:-\/|\:-D|\:-P|\(\!\)|\(\?\))(?=\s|$)/', array($this, '_getsmiley'));
             $char_regexes[] = array('/&amp;([A-Za-z0-9]+|\#[0-9]+|\#[xX][0-9A-Fa-f]+);/', array($this, '_parse_specialchar'));
 
-            $event = framework\Event::createNew('core', 'thebuggenie\core\framework\helpers\TextParser::_parse_line::char_regexes', $this, array(), $char_regexes);
+            $parameters = array();
+            if (isset($this->options['target'])) $parameters['target'] = $this->options['target'];
+            $event = framework\Event::createNew('core', 'thebuggenie\core\framework\helpers\TextParser::_parse_line::char_regexes', $this, $parameters, $char_regexes);
             $event->trigger();
 
             $char_regexes = $event->getReturnList();
@@ -1112,6 +1136,7 @@
                 $this->deflist = false;
                 $this->ignore_newline = false;
 
+                $text = preg_replace_callback('/<source((?:\s+[^\s]+=.*)*)>\s*?(.+)\s*?<\/source>/ismU', array($this, "_parse_save_code"), $text);
                 $text = preg_replace_callback('/<(nowiki|pre)>(.*)<\/(\\1)>(?!<\/(\\1)>)/ismU', array($this, "_parse_save_nowiki"), $text);
                 $text = preg_replace_callback('/[\{]{3,3}([\d|\w|\|]*)[\}]{3,3}/ismU', array($this, "_parse_insert_variables"), $text);
                 $text = preg_replace_callback('/(?<!\{)[\{]{2,2}([^{^}.]*)[\}]{2,2}(?!\})/ismU', array($this, "_parse_insert_template"), $text);
@@ -1127,7 +1152,6 @@
                     $text = preg_replace_callback('/<includeonly>(.+?)<\/includeonly>(?!<\/includeonly>)/ism', array($this, "_parse_remove_includeonly"), $text);
                     $text = preg_replace_callback('/<noinclude>(.+?)<\/noinclude>(?!<\/noinclude>)/ism', array($this, "_parse_preserve_noinclude"), $text);
                 }
-                $text = preg_replace_callback('/<source((?:\s+[^\s]+=".*")*)>\s*?(.+)\s*?<\/source>/ismU', array($this, "_parse_save_code"), $text);
                 // Thanks to Mike Smith (scgtrp) for the above regexp
 
                 $text = tbg_decodeUTF8($text, true);
@@ -1287,7 +1311,7 @@
                 }
                 else
                 {
-                    $language = \thebuggenie\core\framework\Settings::get('highlight_default_lang');
+                    $language = framework\Settings::get(framework\Settings::SETTING_SYNTAX_HIGHLIGHT_DEFAULT_LANGUAGE);
                 }
 
                 $numbering_startfrom = preg_match('/(?<=line start=")(.+?)(?=")/', $params, $matches);
@@ -1300,71 +1324,81 @@
                     $numbering_startfrom = 1;
                 }
 
-                $geshi = new \GeSHi($codeblock, $language);
+//                $geshi = new \GeSHi($codeblock, $language);
+                $highlighter = new Highlighter();
 
-                $highlighting = preg_match('/(?<=line=")(.+?)(?=")/', $params, $matches);
-                if ($highlighting !== 0)
-                {
-                    $highlighting = $matches[0];
-                }
-                else
-                {
-                    $highlighting = false;
+                if ($language == 'html4strict') $language = 'html';
+
+                if (!in_array($language, $highlighter->listLanguages())) {
+                    $language = 'html';
                 }
 
-                $interval = preg_match('/(?<=highlight=")(.+?)(?=")/', $params, $matches);
-                if ($interval !== 0)
-                {
-                    $interval = $matches[0];
-                }
-                else
-                {
-                    $interval = \thebuggenie\core\framework\Settings::get('highlight_default_interval');
-                }
+                $codeblock = $highlighter->highlight($language, $codeblock);
 
-                if ($highlighting === false)
-                {
-                    switch (\thebuggenie\core\framework\Settings::get('highlight_default_numbering'))
-                    {
-                        case 1:
-                            // Line numbering with a highloght every n rows
-                            $geshi->enable_line_numbers(GESHI_FANCY_LINE_NUMBERS, $interval);
-                            $geshi->start_line_numbers_at($numbering_startfrom);
-                            break;
-                        case 2:
-                            // Normal line numbering
-                            $geshi->enable_line_numbers(GESHI_NORMAL_LINE_NUMBERS, 10);
-                            $geshi->start_line_numbers_at($numbering_startfrom);
-                            break;
-                        case 3:
-                            break; // No numbering
-                    }
-                }
-                else
-                {
-                    switch($highlighting)
-                    {
-                        case 'highlighted':
-                        case 'GESHI_FANCY_LINE_NUMBERS':
-                            // Line numbering with a highloght every n rows
-                            $geshi->enable_line_numbers(GESHI_FANCY_LINE_NUMBERS, $interval);
-                            $geshi->start_line_numbers_at($numbering_startfrom);
-                            break;
-                        case 'normal':
-                        case 'GESHI_NORMAL_LINE_NUMBERS':
-                            // Normal line numbering
-                            $geshi->enable_line_numbers(GESHI_NORMAL_LINE_NUMBERS, 10);
-                            $geshi->start_line_numbers_at($numbering_startfrom);
-                            break;
-                        case 3:
-                            break; // No numbering
-                    }
-                }
-
-                $codeblock = $geshi->parse_code();
-                unset($geshi);
+//                $highlighting = preg_match('/(?<=line=")(.+?)(?=")/', $params, $matches);
+//                if ($highlighting !== 0)
+//                {
+//                    $highlighting = $matches[0];
+//                }
+//                else
+//                {
+//                    $highlighting = false;
+//                }
+//
+//                $interval = preg_match('/(?<=highlight=")(.+?)(?=")/', $params, $matches);
+//                if ($interval !== 0)
+//                {
+//                    $interval = $matches[0];
+//                }
+//                else
+//                {
+//                    $interval = \thebuggenie\core\framework\Settings::get('highlight_default_interval');
+//                }
+//
+//                if ($highlighting === false)
+//                {
+//                    switch (\thebuggenie\core\framework\Settings::get('highlight_default_numbering'))
+//                    {
+//                        case 1:
+//                            // Line numbering with a highloght every n rows
+//                            $geshi->enable_line_numbers(GESHI_FANCY_LINE_NUMBERS, $interval);
+//                            $geshi->start_line_numbers_at($numbering_startfrom);
+//                            break;
+//                        case 2:
+//                            // Normal line numbering
+//                            $geshi->enable_line_numbers(GESHI_NORMAL_LINE_NUMBERS, 10);
+//                            $geshi->start_line_numbers_at($numbering_startfrom);
+//                            break;
+//                        case 3:
+//                            break; // No numbering
+//                    }
+//                }
+//                else
+//                {
+//                    switch($highlighting)
+//                    {
+//                        case 'highlighted':
+//                        case 'GESHI_FANCY_LINE_NUMBERS':
+//                            // Line numbering with a highloght every n rows
+//                            $geshi->enable_line_numbers(GESHI_FANCY_LINE_NUMBERS, $interval);
+//                            $geshi->start_line_numbers_at($numbering_startfrom);
+//                            break;
+//                        case 'normal':
+//                        case 'GESHI_NORMAL_LINE_NUMBERS':
+//                            // Normal line numbering
+//                            $geshi->enable_line_numbers(GESHI_NORMAL_LINE_NUMBERS, 10);
+//                            $geshi->start_line_numbers_at($numbering_startfrom);
+//                            break;
+//                        case 3:
+//                            break; // No numbering
+//                    }
+//                }
+//
+//                $codeblock = $geshi->parse_code();
+                unset($highlighter);
             }
-            return '<code>' . $codeblock . '</code>';
+            framework\Context::getResponse()->addStylesheet('/css/highlight.php/github.css');
+            return '<pre class="hljs ' . strtolower($language) . '"><code>' . $codeblock->value . '</code></pre>';
         }
 
         protected function _parse_restore_code($matches)

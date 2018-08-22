@@ -96,6 +96,8 @@ class Main extends framework\Action
         $name = trim($request['name']);
         if (strlen($name) > 0)
         {
+			if (!$request['update_saved_search'])
+				$this->search_object = new entities\SavedSearch();
             $this->search_object->setName($request['name']);
             $this->search_object->setDescription($request['description']);
             $this->search_object->setIsPublic((bool) $request['is_public']);
@@ -584,7 +586,7 @@ class Main extends framework\Action
 
     public function runSaveColumnSettings(framework\Request $request)
     {
-        framework\Settings::saveSetting('search_scs_' . $request['template'], join(',', $request['columns']));
+        framework\Settings::saveSetting('search_scs_' . $request['template'], join(',', $request['columns']), 'core', 0, $this->getUser()->getID());
         return $this->renderJSON(array('columns' => 'ok'));
     }
 

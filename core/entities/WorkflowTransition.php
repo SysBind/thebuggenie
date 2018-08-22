@@ -113,7 +113,7 @@
             $transitions = array();
             $transitions['investigateissue'] = array('name' => 'Investigate issue', 'description' => 'Assign the issue to yourself and start investigating it', 'outgoing_step' => 'investigating', 'template' => null, 'pre_validations' => array(WorkflowTransitionValidationRule::RULE_MAX_ASSIGNED_ISSUES => 5), 'actions' => array(WorkflowTransitionAction::ACTION_ASSIGN_ISSUE_SELF => 0));
             $transitions['requestmoreinformation'] = array('name' => 'Request more information', 'description' => 'Move issue back to new state for more details', 'outgoing_step' => 'new', 'template' => 'main/updateissueproperties', 'actions' => array(WorkflowTransitionAction::ACTION_CLEAR_ASSIGNEE => 0));
-            $transitions['confirmissue'] = array('name' => 'Confirm issue', 'description' => 'Confirm that the issue is valid', 'outgoing_step' => 'confirmed', 'template' => null, 'actions' => array(WorkflowTransitionAction::ACTION_SET_PERCENT => 10, WorkflowTransitionAction::ACTION_SET_PRIORITY => 0));
+            $transitions['confirmissue'] = array('name' => 'Confirm issue', 'description' => 'Confirm that the issue is valid', 'outgoing_step' => 'confirmed', 'template' => null, 'actions' => array(WorkflowTransitionAction::ACTION_SET_PERCENT => 10));
             $transitions['rejectissue'] = array('name' => 'Reject issue', 'description' => 'Reject the issue as invalid', 'outgoing_step' => 'rejected', 'template' => 'main/updateissueproperties', 'post_validations' => array(WorkflowTransitionValidationRule::RULE_RESOLUTION_VALID => join(',', $rejected_resolutions)), 'actions' => array(WorkflowTransitionAction::ACTION_SET_RESOLUTION => 0, WorkflowTransitionAction::ACTION_SET_DUPLICATE => 0, WorkflowTransitionAction::ACTION_SET_PERCENT => 100, WorkflowTransitionAction::ACTION_USER_STOP_WORKING => 0));
             $transitions['acceptissue'] = array('name' => 'Accept issue', 'description' => 'Accept the issue and assign it to yourself', 'outgoing_step' => 'inprogress', 'template' => null, 'pre_validations' => array(WorkflowTransitionValidationRule::RULE_MAX_ASSIGNED_ISSUES => 5), 'actions' => array(WorkflowTransitionAction::ACTION_ASSIGN_ISSUE_SELF => 0, WorkflowTransitionAction::ACTION_USER_START_WORKING => 0));
             $transitions['reopenissue'] = array('name' => 'Reopen issue', 'description' => 'Reopen the issue', 'outgoing_step' => 'new', 'template' => null, 'actions' => array(WorkflowTransitionAction::ACTION_CLEAR_RESOLUTION => 0, WorkflowTransitionAction::ACTION_CLEAR_DUPLICATE => 0, WorkflowTransitionAction::ACTION_CLEAR_PERCENT => 0));
@@ -463,7 +463,7 @@
         public function validateFromRequest(\thebuggenie\core\framework\Request $request)
         {
             $this->_request = $request;
-            foreach ($this->getPostValidationRules() as $rule)
+            foreach ($this->getPreValidationRules() as $rule)
             {
                 if (!$rule->isValid($request))
                 {
@@ -514,6 +514,22 @@
             {
                 $action->perform($issue, $request);
             }
+
+            foreach ($this->getPostValidationRules() as $rule)
+            {
+                if (!$rule->isValid($request))
+                {
+                    $this->_validation_errors[$rule->getRule()] = true;
+                }
+            }
+
+            if (count($this->getValidationErrors()))
+            {
+                framework\Context::setMessage('issue_error', 'transition_error');
+                framework\Context::setMessage('issue_workflow_errors', $this->getValidationErrors());
+
+                return false;
+            }
             
             $issue->save();
 
@@ -536,6 +552,16 @@
             {
                 $action->perform($issue, $request);
             }
+
+            foreach ($this->getPostValidationRules() as $rule)
+            {
+                if (!$rule->isValid($request))
+                {
+                    $this->_validation_errors[$rule->getRule()] = true;
+                }
+            }
+
+            if (!empty($this->_validation_errors)) return false;
             
             if ($request->hasParameter('comment_body') && trim($request['comment_body'] != '')) {
                 $comment = new \thebuggenie\core\entities\Comment();

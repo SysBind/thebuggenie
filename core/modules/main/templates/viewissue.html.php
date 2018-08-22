@@ -13,8 +13,8 @@
             <?php echo __('Please wait while updating issue type'); ?>...
         </div>
     </div>
-    <div id="issue_<?php echo $issue->getID(); ?>" class="viewissue_container <?php if ($issue->isBlocking()) echo ' blocking'; ?>">
-        <div id="viewissue_header_container">
+    <div id="issue_<?php echo $issue->getID(); ?>" class="viewissue_container cf <?php if ($issue->isBlocking()) echo ' blocking'; ?>">
+        <div id="viewissue_header_container" class="cf">
             <table cellpadding=0 cellspacing=0 class="title_area">
                 <tr>
                     <td class="issue_navigation" id="go_previous_open_issue">
@@ -52,6 +52,8 @@
                     <td id="title_field" class="<?php if ($issue->isTitleChanged()): ?>issue_detail_changed<?php endif; ?><?php if (!$issue->isTitleMerged()): ?> issue_detail_unmerged<?php endif; ?> hoverable">
                         <div class="viewissue_title">
                             <span class="faded_out" id="title_header">
+                                <?php echo image_tag($issue->getProject()->getSmallIconName(), ['class' => 'issue_project_icon'], $issue->getProject()->hasSmallIcon()); ?>
+                                <span class="project_name"><?php echo link_tag(make_url('project_dashboard', array('project_key' => $issue->getProject()->getKey())), $issue->getProject()->getName()); ?> / </span>
                                 <?php include_component('issueparent_crumbs', array('issue' => $issue)); ?>
                             </span>
                             <span id="issue_title">
@@ -223,34 +225,46 @@
                 <?php endif; ?>
             </div>
         </div>
-        <div id="workflow_actions">
-            <ul class="workflow_actions simple_list">
-                <?php if ($issue->isWorkflowTransitionsAvailable()): ?>
-                    <?php $cc = 1; $num_transitions = count($issue->getAvailableWorkflowTransitions()); ?>
-                    <?php foreach ($issue->getAvailableWorkflowTransitions() as $transition): ?>
-                        <li class="workflow">
-                            <div class="tooltip from-above rightie">
-                                <?php echo $transition->getDescription(); ?>
-                            </div>
-                            <?php if ($transition->hasTemplate()): ?>
-                                <input class="button button-silver<?php if ($cc == 1): ?> first<?php endif; if ($cc == $num_transitions): ?> last<?php endif; ?>" type="button" value="<?php echo $transition->getName(); ?>" onclick="TBG.Issues.showWorkflowTransition(<?php echo $transition->getID(); ?>);">
-                            <?php else: ?>
-                                <form action="<?php echo make_url('transition_issue', array('project_key' => $issue->getProject()->getKey(), 'issue_id' => $issue->getID(), 'transition_id' => $transition->getID())); ?>" method="post">
-                                    <input type="submit" class="button button-silver<?php if ($cc == 1): ?> first<?php endif; if ($cc == $num_transitions): ?> last<?php endif; ?>" value="<?php echo $transition->getName(); ?>">
-                                </form>
-                            <?php endif; ?>
-                        </li>
-                        <?php $cc++; ?>
-                    <?php endforeach; ?>
-                <?php endif; ?>
-                <li class="more_actions">
-                    <input class="dropper button button-silver first last" id="more_actions_<?php echo $issue->getID(); ?>_button" type="button" value="<?php echo ($issue->isWorkflowTransitionsAvailable()) ? __('More actions') : __('Actions'); ?>">
-                    <?php include_component('main/issuemoreactions', array('issue' => $issue, 'times' => false)); ?>
-                </li>
-            </ul>
-        </div>
         <div id="viewissue_left_box_top">
+          <div id="workflow_actions">
+            <ul class="workflow_actions simple_list">
+              <?php if ($issue->isWorkflowTransitionsAvailable()): ?>
+                <?php $cc = 1; $num_transitions = count($issue->getAvailableWorkflowTransitions()); ?>
+                <?php foreach ($issue->getAvailableWorkflowTransitions() as $transition): ?>
+                  <li class="workflow">
+                    <div class="tooltip from-above rightie">
+                      <?php echo $transition->getDescription(); ?>
+                    </div>
+                    <?php if ($transition->hasTemplate()): ?>
+                      <input class="button button-silver<?php if ($cc == 1): ?> first<?php endif; if ($cc == $num_transitions): ?> last<?php endif; ?>" type="button" value="<?php echo $transition->getName(); ?>" onclick="TBG.Issues.showWorkflowTransition(<?php echo $transition->getID(); ?>);">
+                    <?php else: ?>
+                      <form action="<?php echo make_url('transition_issue', array('project_key' => $issue->getProject()->getKey(), 'issue_id' => $issue->getID(), 'transition_id' => $transition->getID())); ?>" method="post">
+                        <input type="submit" class="button button-silver<?php if ($cc == 1): ?> first<?php endif; if ($cc == $num_transitions): ?> last<?php endif; ?>" value="<?php echo $transition->getName(); ?>">
+                      </form>
+                    <?php endif; ?>
+                  </li>
+                  <?php $cc++; ?>
+                <?php endforeach; ?>
+              <?php endif; ?>
+              <li class="more_actions">
+                <input class="dropper button button-silver first last" id="more_actions_<?php echo $issue->getID(); ?>_button" type="button" value="<?php echo ($issue->isWorkflowTransitionsAvailable()) ? __('More actions') : __('Actions'); ?>">
+                <?php include_component('main/issuemoreactions', array('issue' => $issue, 'times' => false)); ?>
+              </li>
+            </ul>
+          </div>
             <div id="issue_view">
+                <div id="issue_details_container">
+                    <div id="issue_details">
+                        <div class="collapser_link" onclick="$('issue_details_container').toggleClassName('collapsed');$('issue_main_container').toggleClassName('uncollapsed');">
+                            <a href="javascript:void(0);" class="image">
+                                <?php echo fa_image_tag('arrow-left', ['class' => 'collapser']); ?>
+                                <?php echo fa_image_tag('arrow-right', ['class' => 'expander']); ?>
+                            </a>
+                        </div>
+                        <div class="issue_details_fieldsets_wrapper"><?php include_component('main/issuedetailslisteditable', array('issue' => $issue)); ?></div>
+                        <div style="clear: both; margin-bottom: 5px;"> </div>
+                    </div>
+                </div>
                 <div id="issue_main_container">
                     <div class="issue_main" id="issue_main">
                         <?php \thebuggenie\core\framework\Event::createNew('core', 'viewissue_right_top', $issue)->trigger(); ?>
@@ -314,49 +328,55 @@
                         </fieldset>
                         <?php include_component('main/issuemaincustomfields', array('issue' => $issue)); ?>
                         <?php \thebuggenie\core\framework\Event::createNew('core', 'viewissue_right_bottom', $issue)->trigger(); ?>
-                        <fieldset class="comments" id="viewissue_comments_container">
-                            <legend class="viewissue_comments_header">
-                                <?php echo __('Comments (%count)', array('%count' => '<span id="viewissue_comment_count">'.$issue->countUserComments().'</span>')); ?>
-                                <div class="dropper_container">
-                                    <?php echo image_tag('icon-mono-settings.png', array('class' => 'dropper')); ?>
-                                    <ul class="more_actions_dropdown dropdown_box popup_box leftie">
-                                        <li><a href="javascript:void(0);" id="comments_show_system_comments_toggle" onclick="$$('#comments_box .system_comment').each(function (elm) { $(elm).toggle(); });" /><?php echo __('Toggle system-generated comments'); ?></a></li>
-                                    </ul>
-                                </div>
-                                <ul class="simple_list button_container" id="add_comment_button_container">
-                                    <li id="comment_add_button"><input class="button button-silver first last" type="button" onclick="TBG.Main.Comment.showPost();" value="<?php echo __('Post comment'); ?>"></li>
-                                </ul>
-                            </legend>
-                            <div id="viewissue_comments">
-                                <?php include_component('main/comments', array('target_id' => $issue->getID(), 'mentionable_target_type' => 'issue', 'target_type' => \thebuggenie\core\entities\Comment::TYPE_ISSUE, 'show_button' => false, 'comment_count_div' => 'viewissue_comment_count', 'save_changes_checked' => $issue->hasUnsavedChanges(), 'issue' => $issue, 'forward_url' => make_url('viewissue', array('project_key' => $issue->getProject()->getKey(), 'issue_no' => $issue->getFormattedIssueNo()), false))); ?>
+
+                        
+                        <div class="tab_menu inset">
+                            <ul id="viewissue_activity">
+                                <li id="tab_viewissue_comments" class="selected"><a href="javascript:void(0);" onclick="TBG.Main.Helpers.tabSwitcher('tab_viewissue_comments', 'viewissue_activity');"><i class="fa fa-comments-o"></i><?= __('Comments (%count)', array('%count' => '<span id="viewissue_comment_count"></span>')); ?></a></li>
+                                <?php \thebuggenie\core\framework\Event::createNew('core', 'viewissue_before_tabs', $issue)->trigger(); ?>
+                                <li id="tab_viewissue_history"><a href="javascript:void(0);" onclick="TBG.Main.Helpers.tabSwitcher('tab_viewissue_history', 'viewissue_activity');"><i class="fa fa-history"></i><?= __('History'); ?></a></li>
+                            </ul>
+                        </div>
+                        <div id="viewissue_activity_panes">
+                            <div id="tab_viewissue_comments_pane">
+                                <fieldset class="comments" id="viewissue_comments_container">
+                                    <div class="viewissue_comments_header">
+                                        <a href="javascript:void(0);" id="comments_show_system_comments_toggle" onclick="$$('#comments_box .system_comment').each(function (elm) { $(elm).toggle(); });"><?php echo __('Toggle system-generated comments'); ?></a>
+                                        <a href="javascript:void(0);" onclick="TBG.Main.Comment.toggleOrder('<?= \thebuggenie\core\entities\Comment::TYPE_ISSUE; ?>', '<?= $issue->getID(); ?>');"><?php echo __('Sort comments in opposite direction'); ?></a>
+                                        <?php echo image_tag('spinning_16.gif', array('style' => 'display: none;', 'id' => 'comments_loading_indicator')); ?>
+                                        <?php if ($tbg_user->canPostComments() && ((\thebuggenie\core\framework\Context::isProjectContext() && !\thebuggenie\core\framework\Context::getCurrentProject()->isArchived()) || !\thebuggenie\core\framework\Context::isProjectContext())): ?>
+                                            <ul class="simple_list button_container" id="add_comment_button_container">
+                                                <li id="comment_add_button"><input class="button button-silver first last" type="button" onclick="TBG.Main.Comment.showPost();" value="<?php echo __('Post comment'); ?>"></li>
+                                            </ul>
+                                        <?php endif; ?>
+                                    </div>
+                                    <div id="viewissue_comments">
+                                        <?php include_component('main/comments', array('target_id' => $issue->getID(), 'mentionable_target_type' => 'issue', 'target_type' => \thebuggenie\core\entities\Comment::TYPE_ISSUE, 'show_button' => false, 'comment_count_div' => 'viewissue_comment_count', 'save_changes_checked' => $issue->hasUnsavedChanges(), 'issue' => $issue, 'forward_url' => make_url('viewissue', array('project_key' => $issue->getProject()->getKey(), 'issue_no' => $issue->getFormattedIssueNo()), false))); ?>
+                                    </div>
+                                    <script type="text/javascript">
+                                        require(['prototype'], function (prototype) {
+                                            $('viewissue_comment_count').update($('comments_box').select('.comment').size());
+                                        });
+                                    </script>
+                                </fieldset>
                             </div>
-                        </fieldset>
-                        <fieldset class="viewissue_history">
-                            <legend class="viewissue_history_header">
-                                <?php echo __('History'); ?>
-                                <?php echo image_tag('spinning_16.gif', array('style' => 'display: none;', 'id' => 'viewissue_log_loading_indicator')); ?>
-                                <div class="button_container" id="viewissue_history_button_container">
-                                    <input class="button button-silver first last" type="button" onclick="TBG.Issues.showLog('<?php echo make_url('issue_log', array('project_key' => $issue->getProject()->getKey(), 'issue_id' => $issue->getID())); ?>');" value="<?php echo __('Show issue history'); ?>">
-                                </div>
-                            </legend>
-                            <div id="viewissue_log_items"></div>
-                        </fieldset>
-                        <?php \thebuggenie\core\framework\Event::createNew('core', 'viewissue_before_tabs', $issue)->trigger(); ?>
-                        <div id="viewissue_panes">
                             <?php \thebuggenie\core\framework\Event::createNew('core', 'viewissue_after_tabs', $issue)->trigger(); ?>
+                            <div id="tab_viewissue_history_pane" style="display:none;">
+                                <fieldset class="viewissue_history">
+                                    <div id="viewissue_log_items">
+                                        <ul>
+                                            <?php $previous_time = null; ?>
+                                            <?php $include_user = true; ?>
+                                            <?php foreach (array_reverse($issue->getLogEntries()) as $item): ?>
+                                                <?php if (!$item instanceof \thebuggenie\core\entities\LogItem) continue; ?>
+                                                <?php include_component('main/issuelogitem', compact('item', 'previous_time', 'include_user')); ?>
+                                                <?php $previous_time = $item->getTime(); ?>
+                                            <?php endforeach; ?>
+                                        </ul>
+                                    </div>
+                                </fieldset>
+                            </div>
                         </div>
-                    </div>
-                </div>
-                <div id="issue_details_container">
-                    <div id="issue_details">
-                        <div class="collapser_link" onclick="$('issue_details_container').toggleClassName('collapsed');$('issue_main_container').toggleClassName('uncollapsed');">
-                            <a href="javascript:void(0);" class="image">
-                                <?php echo image_tag('sidebar_collapse.png', array('class' => 'collapser')); ?>
-                                <?php echo image_tag('sidebar_expand.png', array('class' => 'expander')); ?>
-                            </a>
-                        </div>
-                        <div class="issue_details_fieldsets_wrapper"><?php include_component('main/issuedetailslisteditable', array('issue' => $issue)); ?></div>
-                        <div style="clear: both; margin-bottom: 5px;"> </div>
                     </div>
                 </div>
             </div>

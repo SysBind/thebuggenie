@@ -314,7 +314,7 @@
             default:
                 return $tstamp;
         }
-        return $tstring;
+        return utf8_encode($tstring);
     }
 
     /**
@@ -509,24 +509,23 @@
     {
         switch (true)
         {
-            case $user->isOffline():
-                return image_tag('user-offline.png', array('class' => 'userstate', 'title' => __($user->getState()->getName())));
+            case $user->getState()->isInMeeting():
+                return fa_image_tag('circle', array('class' => 'userstate in-meeting', 'title' => __($user->getState()->getName())));
                 break;
             case $user->getState()->isBusy():
-            case $user->getState()->isUnavailable():
-                return image_tag('user-busy.png', array('class' => 'userstate', 'title' => __($user->getState()->getName())));
+                return fa_image_tag('minus-circle', array('class' => 'userstate busy', 'title' => __($user->getState()->getName())));
+                break;
+            case $user->isOffline():
+                return fa_image_tag('times-circle', array('class' => 'userstate offline', 'title' => __($user->getState()->getName())));
                 break;
             case $user->getState()->isAbsent():
-                return image_tag('user-invisible.png', array('class' => 'userstate', 'title' => __($user->getState()->getName())));
-                break;
-            case $user->getState()->isInMeeting():
-                return image_tag('user-away-extended.png', array('class' => 'userstate', 'title' => __($user->getState()->getName())));
+                return fa_image_tag('circle', array('class' => 'userstate absent', 'title' => __($user->getState()->getName())));
                 break;
             case $user->getState()->isUnavailable():
-                return image_tag('user-away.png', array('class' => 'userstate', 'title' => __($user->getState()->getName())));
+                return fa_image_tag('circle-thin', array('class' => 'userstate unavailable', 'title' => __($user->getState()->getName())));
                 break;
             default:
-                return image_tag('user-online.png', array('class' => 'userstate', 'title' => __($user->getState()->getName())));
+                return fa_image_tag('check-circle', array('class' => 'userstate online', 'title' => __($user->getState()->getName())));
                 break;
         }
     }
@@ -590,4 +589,18 @@
         }
 
         return $url;
+    }
+
+    /**
+     * Get a subset of the items from the given array with default for not found.
+     *
+     * @param  array  $array
+     * @param  array|string  $keys
+     * @param  mixed  $default
+     *
+     * @return array
+     */
+    function array_only_with_default($array, $keys, $default = null)
+    {
+        return array_merge(array_fill_keys($keys, $default), array_intersect_key($array, array_flip((array) $keys)));
     }

@@ -33,19 +33,27 @@
                 <tr>
                     <td style="padding: 5px; border-top: 1px dotted #AAA; border-bottom: 0; font-weight: bold; font-size: 12px;"><?php echo __('Total estimated effort'); ?></td>
                     <td style="width: 50px; border-top: 1px dotted #AAA; border-bottom: 0; font-size: 13px; font-weight: bold; text-align: center; padding: 5px;" id="scrum_sprint_<?php echo $milestone->getID(); ?>_estimated_points"><?php echo $milestone->getPointsEstimated(); ?></td>
-                    <td style="width: 50px; border-top: 1px dotted #AAA; border-bottom: 0; font-size: 13px; font-weight: bold; text-align: center; padding: 5px;" id="scrum_sprint_<?php echo $milestone->getID(); ?>_estimated_hours"><?php echo $milestone->getHoursEstimated(); ?></td>
+                    <td style="width: 50px; border-top: 1px dotted #AAA; border-bottom: 0; font-size: 13px; font-weight: bold; text-align: center; padding: 5px;" id="scrum_sprint_<?php echo $milestone->getID(); ?>_estimated_hours"><?php echo $milestone->getHoursAndMinutesEstimated(true, true); ?></td>
                     <td style="padding: 5px; border-top: 1px dotted #AAA; border-bottom: 0; font-weight: bold; font-size: 12px;">&nbsp;</td>
                 </tr>
+                <?php if ($milestone->hasStartingDate() && $milestone->hasScheduledDate()): ?>
+                    <tr>
+                        <td style="padding: 5px; border-top: 1px dotted #AAA; border-bottom: 0; font-weight: bold; font-size: 12px;"><?php echo __('Previous effort'); ?></td>
+                        <td style="width: 50px; border-top: 1px dotted #AAA; border-bottom: 0; font-size: 13px; font-weight: bold; text-align: center; padding: 5px;" id="scrum_sprint_<?php echo $milestone->getID(); ?>_previous_spent_points"><?php echo isset($burndown_data['spent_times']['points_spent_before']) ? $burndown_data['spent_times']['points_spent_before'] : 0; ?></td>
+                        <td style="width: 50px; border-top: 1px dotted #AAA; border-bottom: 0; font-size: 13px; font-weight: bold; text-align: center; padding: 5px;" id="scrum_sprint_<?php echo $milestone->getID(); ?>_previous_spent_hours"><?php echo isset($burndown_data['spent_times']['hours_spent_before']) ? \thebuggenie\core\entities\common\Timeable::formatHoursAndMinutes($burndown_data['spent_times']['hours_spent_before'], $burndown_data['spent_times']['minutes_spent_before']) : 0; ?></td>
+                        <td style="padding: 5px; border-top: 1px dotted #AAA; border-bottom: 0; font-weight: bold; font-size: 12px;">&nbsp;</td>
+                    </tr>
+                <?php endif; ?>
                 <tr>
                     <td style="padding: 5px; border-top: 1px dotted #AAA; border-bottom: 0; font-weight: bold; font-size: 12px;"><?php echo __('Current effort'); ?></td>
-                    <td style="width: 50px; border-top: 1px dotted #AAA; border-bottom: 0; font-size: 13px; font-weight: bold; text-align: center; padding: 5px;" id="scrum_sprint_<?php echo $milestone->getID(); ?>_spent_points"><?php echo $milestone->getPointsSpent(); ?></td>
-                    <td style="width: 50px; border-top: 1px dotted #AAA; border-bottom: 0; font-size: 13px; font-weight: bold; text-align: center; padding: 5px;" id="scrum_sprint_<?php echo $milestone->getID(); ?>_spent_hours"><?php echo $milestone->getHoursSpent(); ?></td>
+                    <td style="width: 50px; border-top: 1px dotted #AAA; border-bottom: 0; font-size: 13px; font-weight: bold; text-align: center; padding: 5px;" id="scrum_sprint_<?php echo $milestone->getID(); ?>_spent_points"><?php echo isset($burndown_data['spent_times']['points_spent_before']) ? $milestone->getPointsSpent() - $burndown_data['spent_times']['points_spent_before'] : $milestone->getPointsSpent(); ?></td>
+                    <td style="width: 50px; border-top: 1px dotted #AAA; border-bottom: 0; font-size: 13px; font-weight: bold; text-align: center; padding: 5px;" id="scrum_sprint_<?php echo $milestone->getID(); ?>_spent_hours"><?php echo isset($burndown_data['spent_times']['hours_spent_before']) ? \thebuggenie\core\entities\common\Timeable::formatHoursAndMinutes($milestone->getHoursSpent(true) - $burndown_data['spent_times']['hours_spent_before'], $milestone->getMinutesSpent(true) - $burndown_data['spent_times']['minutes_spent_before']) : $milestone->getHoursAndMinutesEstimated(true, true); ?></td>
                     <td style="padding: 5px; border-top: 1px dotted #AAA; border-bottom: 0; font-weight: bold; font-size: 12px;">&nbsp;</td>
                 </tr>
                 <tr>
                     <td style="padding: 5px; border-top: 1px dotted #AAA; border-bottom: 1px dotted #AAA; font-weight: bold; font-size: 12px;"><?php echo __('Total remaining effort'); ?></td>
                     <td style="width: 50px; border-top: 1px dotted #AAA; border-bottom: 1px dotted #AAA; font-size: 13px; font-weight: bold; text-align: center; padding: 5px;" id="scrum_sprint_<?php echo $milestone->getID(); ?>_remaining_points"><?php echo $milestone->getPointsEstimated() - $milestone->getPointsSpent(); ?></td>
-                    <td style="width: 50px; border-top: 1px dotted #AAA; border-bottom: 1px dotted #AAA; font-size: 13px; font-weight: bold; text-align: center; padding: 5px;" id="scrum_sprint_<?php echo $milestone->getID(); ?>_remaining_hours"><?php echo $milestone->getHoursEstimated() - $milestone->getHoursSpent(); ?></td>
+                    <td style="width: 50px; border-top: 1px dotted #AAA; border-bottom: 1px dotted #AAA; font-size: 13px; font-weight: bold; text-align: center; padding: 5px;" id="scrum_sprint_<?php echo $milestone->getID(); ?>_remaining_hours"><?php echo \thebuggenie\core\entities\common\Timeable::formatHoursAndMinutes($milestone->getHoursEstimated(true) - $milestone->getHoursSpent(true), $milestone->getMinutesEstimated(true) - $milestone->getMinutesSpent(true)); ?></td>
                     <td style="padding: 5px; border-top: 1px dotted #AAA; border-bottom: 1px dotted #AAA; font-weight: bold; font-size: 12px;">&nbsp;</td>
                 </tr>
             </tbody>
@@ -95,8 +103,9 @@
                                     ep_values.push(burndown_data.estimations.points[d]);
                                 }
                             }
-                            var d_e_velocity_hours = [[eh_keys.min() * 1000, eh_values.max()], [eh_keys.max() * 1000, 0]];
-                            var d_e_velocity_points = [[ep_keys.min() * 1000, ep_values.max()], [ep_keys.max() * 1000, 0]];
+                            var add = function (a, b) { return a + b; };
+                            var d_e_velocity_hours = [[eh_keys.min() * 1000, eh_values.reduce(add, 0)], [eh_keys.max() * 1000, 0]];
+                            var d_e_velocity_points = [[ep_keys.min() * 1000, ep_values.reduce(add, 0)], [ep_keys.max() * 1000, 0]];
                                 var x_config = TBG.Chart.config.x_config;
                                 x_config.mode = 'time';
                                 var grid_config = TBG.Chart.config.grid_config;

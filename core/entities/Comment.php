@@ -108,6 +108,11 @@
         protected $_system_comment = false;
 
         /**
+         * @Column(type="boolean")
+         */
+        protected $_has_associated_changes = false;
+
+        /**
          * @Column(type="integer", length=10)
          */
         protected $_comment_number = 0;
@@ -142,21 +147,20 @@
          * Returns all comments for a given item
          *
          */
-        static function getComments($target_id, $target_type, $sort_order = \b2db\Criteria::SORT_ASC)
+        public static function getComments($target_id, $target_type, $sort_order = \b2db\Criteria::SORT_ASC)
         {
             $comments = tables\Comments::getTable()->getComments($target_id, $target_type, $sort_order);
-            self::$_comment_count[$target_type][$target_id] = count($comments);
 
             return $comments;
         }
 
-        static function getRecentCommentsByAuthor($user_id, $target_type = self::TYPE_ISSUE, $limit = 10)
+        public static function getRecentCommentsByAuthor($user_id, $target_type = self::TYPE_ISSUE, $limit = 10)
         {
             $comments = tables\Comments::getTable()->getRecentCommentsByUserIDandTargetType($user_id, $target_type, $limit);
             return $comments;
         }
 
-        static function countComments($target_id, $target_type, $include_system_comments = true)
+        public static function countComments($target_id, $target_type, $include_system_comments = true)
         {
             if (!array_key_exists($target_type, self::$_comment_count))
                 self::$_comment_count[$target_type] = array();
@@ -250,13 +254,60 @@
             $notification->save();
         }
 
-        protected function _addIssueNotifications()
+        protected function _addTargetNotifications()
         {
             foreach ($this->getTarget()->getSubscribers() as $user)
             {
-                if ($user->getID() == $this->getPostedByID()) continue;
-                $this->_addNotification(Notification::TYPE_ISSUE_COMMENTED, $user);
+                switch ($this->getTargetType())
+                {
+                    case self::TYPE_ISSUE:
+                        if ($user->getNotificationSetting(framework\Settings::SETTINGS_USER_NOTIFY_SUBSCRIBED_ISSUES, false)->isOn())
+                        {
+                          $this->_addNotificationIfNotNotified(Notification::TYPE_ISSUE_COMMENTED, $user, $this->getPostedBy());
+                        }
+                        break;
+                    case self::TYPE_ARTICLE:
+                        if ($user->getNotificationSetting(framework\Settings::SETTINGS_USER_NOTIFY_SUBSCRIBED_ARTICLES, false)->isOn())
+                        {
+                          $this->_addNotificationIfNotNotified(Notification::TYPE_ARTICLE_COMMENTED, $user, $this->getPostedBy());
+                        }
+                        break;
+                }
             }
+        }
+
+        protected function _addNotificationIfNotNotified($type, $user, $updated_by)
+        {
+          if (! $this->shouldUserBeNotified($user, $updated_by)) return;
+
+          $this->_addNotification($type, $user);
+        }
+
+        public function shouldUserBeNotified($user, $updated_by) {
+          if (!$this->getTarget()->hasAccess($user)) return false;
+
+          if ($user->getNotificationSetting(framework\Settings::SETTINGS_USER_NOTIFY_UPDATED_SELF, false)->isOff() && $user->getID() === $updated_by->getID()) return false;
+
+          if ($user->getNotificationSetting(framework\Settings::SETTINGS_USER_NOTIFY_ITEM_ONCE, false)->isOff()) return true;
+
+          switch ($this->getTargetType())
+          {
+              case self::TYPE_ISSUE:
+                  $target_type_string = '_issue_';
+                  break;
+              case self::TYPE_ARTICLE:
+                  $target_type_string = '_article_';
+                  break;
+          }
+
+          if ($user->getNotificationSetting(framework\Settings::SETTINGS_USER_NOTIFY_ITEM_ONCE . $target_type_string . $this->getTargetID(), false)->isOff())
+          {
+              $user->setNotificationSetting(framework\Settings::SETTINGS_USER_NOTIFY_ITEM_ONCE . $target_type_string . $this->getTargetID(), true);
+
+              return true;
+          }
+
+          return false;
         }
 
         /**
@@ -299,12 +350,12 @@
                         foreach ($this->_getParser()->getMentions() as $user)
                         {
                             if ($user->getID() == framework\Context::getUser()->getID()) continue;
-                            $this->_addNotification(Notification::TYPE_COMMENT_MENTIONED, $user);
+
+                            if (($user->getNotificationSetting(framework\Settings::SETTINGS_USER_NOTIFY_MENTIONED, false)->isOn())) $this->_addNotificationIfNotNotified(Notification::TYPE_COMMENT_MENTIONED, $user, $this->getPostedBy());
                         }
                     }
                     if ($this->getTargetType() == self::TYPE_ISSUE)
                     {
-                        $this->_addIssueNotifications();
                         if (framework\Settings::getUserSetting(framework\Settings::SETTINGS_USER_SUBSCRIBE_CREATED_UPDATED_COMMENTED_ISSUES, $this->getPostedByID()))
                             $this->getTarget()->addSubscriber($this->getPostedByID());
                     }
@@ -313,10 +364,9 @@
                         if (framework\Settings::getUserSetting(framework\Settings::SETTINGS_USER_SUBSCRIBE_CREATED_UPDATED_COMMENTED_ARTICLES, $this->getPostedByID()))
                             $this->getTarget()->addSubscriber($this->getPostedByID());
                     }
+                    $this->_addTargetNotifications();
                 }
-            }
-            else
-            {
+
                 switch ($this->getTargetType())
                 {
                     case self::TYPE_ISSUE:
@@ -329,6 +379,12 @@
                         return;
                 }
             }
+            $this->touchTargetIfItsIssue();
+        }
+
+        protected function touchTargetIfItsIssue()
+        {
+            if ($this->getTargetType() === self::TYPE_ISSUE) $this->getTarget()->touch();
         }
 
         protected function _canPermissionOrSeeAndEditAllComments($permission)
@@ -685,7 +741,7 @@
             return (int) $this->_comment_number;
         }
 
-        public function toJSON()
+        public function toJSON($detailed = true)
         {
             $return_values = array(
                 'id' => $this->getID(),
@@ -720,15 +776,17 @@
 
         public function hasAssociatedChanges()
         {
-            if (is_array($this->_log_items))
-            {
-                $this->_log_item_count = count($this->_log_items);
-            }
-            elseif ($this->_log_item_count === null)
-            {
-                $this->_log_item_count = $this->_b2dbLazycount('_log_items');
-            }
-            return $this->_log_item_count;
+            return $this->_has_associated_changes;
+        }
+
+        public function setHasAssociatedChanges($value = true)
+        {
+            $this->_has_associated_changes = $value;
+        }
+
+        public function getAssociatedChanges()
+        {
+            return $this->getLogItems();
         }
 
         public function getLogItems()
@@ -757,6 +815,11 @@
             }
 
             return $users;
+        }
+
+        protected function _postDelete()
+        {
+            $this->touchTargetIfItsIssue();
         }
 
     }

@@ -23,7 +23,7 @@
      * @package thebuggenie
      * @subpackage tables
      *
-     * @method Projects getTable() Retrieves an instance of this table
+     * @static @method Projects getTable() Retrieves an instance of this table
      * @method \thebuggenie\core\entities\Project selectById(integer $id) Retrieves a project
      *
      * @Table(name="projects")
@@ -62,6 +62,7 @@
         const QA = 'projects.qa_responsible';
         const QA_TYPE = 'projects.qa_responsible_type';
         const LOCKED = 'projects.locked';
+        const ISSUES_LOCK_TYPE = 'projects.issues_lock_type';
         const DELETED = 'projects.deleted';
         const SMALL_ICON = 'projects.small_icon';
         const LARGE_ICON = 'projects.large_icon';
@@ -152,6 +153,7 @@
             $ctn = $crit->returnCriterion(self::NAME, "%{$projectname}%", Criteria::DB_LIKE);
             $ctn->addOr(self::KEY, strtolower("%{$projectname}%"), Criteria::DB_LIKE);
             $crit->addWhere($ctn);
+            $crit->addWhere(self::DELETED, false);
             $crit->addWhere(self::SCOPE, framework\Context::getScope()->getID());
 
             return $this->select($crit);
@@ -239,6 +241,24 @@
             $crit->addWhere(self::SCOPE, framework\Context::getScope()->getID());
 
             return $this->select($crit);
+        }
+
+        public function getFileIds()
+        {
+            $crit = $this->getCriteria();
+            $crit->addSelectionColumn(self::SMALL_ICON, 'file_id_small');
+            $crit->addSelectionColumn(self::LARGE_ICON, 'file_id_large');
+
+            $res = $this->doSelect($crit);
+            $file_ids = [];
+            if ($res) {
+                while ($row = $res->getNextRow()) {
+                    $file_ids[$row['file_id_small']] = $row['file_id_small'];
+                    $file_ids[$row['file_id_large']] = $row['file_id_large'];
+                }
+            }
+
+            return $file_ids;
         }
 
     }

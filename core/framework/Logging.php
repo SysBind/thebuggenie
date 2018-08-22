@@ -63,7 +63,7 @@
                 {
                     file_put_contents(self::$_logfile, mb_strtoupper(self::getLevelName($level)) . " [{$category}] {$message}\n", FILE_APPEND);
                 }
-                $time_msg = (Context::isDebugMode()) ? (($load_time = Context::getLoadtime()) >= 1) ? round($load_time, 2) . ' seconds' : round(($load_time * 1000), 3) . ' ms' : '';
+                $time_msg = (($load_time = Context::getLoadtime()) >= 1) ? round($load_time, 2) . ' seconds' : round(($load_time * 1000), 3) . ' ms';
                 
                 self::$_entries[] = array('category' => $category, 'time' => $time_msg, 'message' => $message, 'level' => $level);
                 self::$_categorized_entries[$category][] = array('time' => $time_msg, 'message' => $message, 'level' => $level);
@@ -96,11 +96,20 @@
             }
         }
         
+        /**
+         * Sets path for the log file. If the log file does not exist at
+         * designated path, it will be created.
+         *
+         * If it was not possible to create the log file, an exception will be
+         * thrown.
+         *
+         * @param string $filename Path to log file.
+         */
         public static function setLogFilePath($filename)
         {
             if (!file_exists($filename))
             {
-                throw new \Exception('Invalid log filename');
+                touch($filename);
             }
             self::$_logfile = $filename;
         }

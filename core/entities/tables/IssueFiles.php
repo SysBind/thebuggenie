@@ -3,7 +3,8 @@
     namespace thebuggenie\core\entities\tables;
 
     use thebuggenie\core\framework,
-        b2db\Criteria;
+        b2db\Criteria,
+        thebuggenie\core\entities\traits\FileLink;
 
     /**
      * Issues <-> Files table
@@ -25,6 +26,8 @@
      */
     class IssueFiles extends ScopedTable
     {
+
+        use FileLink;
 
         const B2DB_TABLE_VERSION = 1;
         const B2DBNAME = 'issuefiles';
@@ -51,7 +54,7 @@
             $this->_addIndex('issueid', self::ISSUE_ID);
         }
 
-        public function addByIssueIDandFileID($issue_id, $file_id)
+        public function addByIssueIDandFileID($issue_id, $file_id, $insert = true)
         {
             $crit = $this->getCriteria();
             $crit->addWhere(self::ISSUE_ID, $issue_id);
@@ -59,6 +62,8 @@
             $crit->addWhere(self::SCOPE, framework\Context::getScope()->getID());
             if ($this->doCount($crit) == 0)
             {
+                if (! $insert) return true;
+
                 $crit = $this->getCriteria();
                 $crit->addInsert(self::SCOPE, framework\Context::getScope()->getID());
                 $crit->addInsert(self::ATTACHED_AT, NOW);

@@ -2,9 +2,9 @@
 
     use thebuggenie\core\entities\Milestone;
 
-    $savebuttonlabel = (isset($savebuttonlabel)) ? $savebuttonlabel : __e('Save milestone');
-    $milestonenamelabel = (isset($milestonenamelabel)) ? $milestonenamelabel : __e('Milestone name');
-    $milestoneplaceholder = (isset($milestoneplaceholder)) ? $milestoneplaceholder : __e('Enter a milestone name');
+    $savebuttonlabel = (isset($savebuttonlabel)) ? $savebuttonlabel : __('Save milestone');
+    $milestonenamelabel = (isset($milestonenamelabel)) ? $milestonenamelabel : __('Milestone name');
+    $milestoneplaceholder = (isset($milestoneplaceholder)) ? $milestoneplaceholder : __('Enter a milestone name');
     if (!isset($milestoneheader)) {
         $milestoneheader = ($milestone->getId()) ? __('Edit milestone details') : __('Add milestone');
     }
@@ -39,6 +39,16 @@
                         <select name="visibility_issues" id="milestone_visibility_issues_<?php echo $milestone->getID(); ?>">
                             <option value="0"<?php if (!$milestone->isVisibleIssues()): ?> selected<?php endif; ?>><?php echo __('Not available'); ?></option>
                             <option value="1"<?php if ($milestone->isVisibleIssues()): ?> selected<?php endif; ?>><?php echo __('Available'); ?></option>
+                        </select>
+                    </td>
+                </tr>
+                <tr>
+                    <td><label for="milestone_percentage_type_<?php echo $milestone->getID(); ?>"><?php echo __('Percentage type'); ?></label></td>
+                    <td>
+                        <select name="percentage_type" id="milestone_percentage_type_<?php echo $milestone->getID(); ?>">
+                            <?php foreach(Milestone::getPercentageTypes() as $percentage_type_key => $percentage_type_text): ?>
+                                <option value="<?php echo $percentage_type_key; ?>"<?php if ($milestone->getPercentageType() == $percentage_type_key): ?> selected<?php endif; ?>><?php echo $percentage_type_text; ?></option>
+                            <?php endforeach; ?>
                         </select>
                     </td>
                 </tr>

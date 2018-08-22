@@ -2,7 +2,9 @@
 
     namespace thebuggenie\modules\mailing;
 
+    use thebuggenie\core\entities\Category;
     use thebuggenie\core\entities\tables\Settings;
+    use thebuggenie\core\entities\File;
     use thebuggenie\modules\publish\entities\Article,
         thebuggenie\modules\mailing\entities\IncomingEmailAccount,
         thebuggenie\modules\mailing\entities\tables\MailQueueTable,
@@ -36,6 +38,8 @@
          */
         const NOTIFY_NEW_ISSUES_MY_PROJECTS = 'notify_new_issues_my_projects';
 
+        const NOTIFY_NEW_ISSUES_MY_PROJECTS_CATEGORY = 'notify_new_issues_my_projects_category';
+
         /**
          * Notify the user when a new article is created in his/her project(s)
          */
@@ -65,6 +69,12 @@
          * Notify the user when he is mentioned
          */
         const NOTIFY_MENTIONED = 'notify_mentioned';
+
+        /**
+         * Notify the user when he is mentioned
+         */
+        const NOTIFY_NOT_WHEN_ACTIVE = 'notify_not_when_active';
+
         const MAIL_ENCODING_BASE64 = 3;
         const MAIL_ENCODING_QUOTED = 4;
         const MAIL_ENCODING_UTF7 = 0;
@@ -121,6 +131,10 @@
             framework\Event::listen('core', 'config_project_tabs_other', array($this, 'listen_projectconfig_tab_other'));
             framework\Event::listen('core', 'config_project_panes', array($this, 'listen_projectconfig_panel'));
             framework\Event::listen('core', 'account_pane_notificationsettings', array($this, 'listen_accountNotificationSettings'));
+            framework\Event::listen('core', 'account_pane_notificationsettings_thead', array($this, 'listen_accountNotificationSettingsThead'));
+            framework\Event::listen('core', 'account_pane_notificationsettings_cell', array($this, 'listen_accountNotificationSettingsCell'));
+            framework\Event::listen('core', 'account_pane_notificationsettings_notification_categories', array($this, 'listen_accountNotificationSettingsNotificationCategories'));
+            framework\Event::listen('core', 'account_pane_notificationsettings_subscriptions', array($this, 'listen_accountNotificationSettingsSubscriptions'));
             framework\Event::listen('core', 'config.createuser.email', array($this, 'listen_configCreateuserEmail'));
             framework\Event::listen('core', 'config.createuser.save', array($this, 'listen_configCreateuserSave'));
             framework\Event::listen('core', 'mainActions::myAccount::saveNotificationSettings', array($this, 'listen_accountSaveNotificationSettings'));
@@ -444,6 +458,8 @@ EOT;
                     unset($users[$user->getID()]);
                 if ($user->getNotificationSetting(self::NOTIFY_ITEM_ONCE, false, 'mailing')->isOn() && $user->getNotificationSetting(self::NOTIFY_ITEM_ONCE . '_article_' . $article->getID(), false, 'mailing')->isOn())
                     unset($users[$user->getID()]);
+                if ($user->getNotificationSetting(framework\Settings::SETTINGS_USER_NOTIFY_ONLY_IN_BOX_WHEN_ACTIVE, false, 'core')->isOn() && $user->isActive())
+                    unset($users[$user->getID()]);
             }
             $mentioned_users = $article->getMentionedUsers();
             foreach ($mentioned_users as $user)
@@ -453,6 +469,8 @@ EOT;
                 if ($user->getNotificationSetting(self::NOTIFY_MENTIONED, true, 'mailing')->isOff())
                     unset($users[$user->getID()]);
                 if ($user->getNotificationSetting(self::NOTIFY_ITEM_ONCE, false, 'mailing')->isOn() && $user->getNotificationSetting(self::NOTIFY_ITEM_ONCE . '_article_' . $article->getID(), false, 'mailing')->isOn())
+                    unset($users[$user->getID()]);
+                if ($user->getNotificationSetting(framework\Settings::SETTINGS_USER_NOTIFY_ONLY_IN_BOX_WHEN_ACTIVE, false, 'core')->isOn() && $user->isActive())
                     unset($users[$user->getID()]);
             }
             return $users;
@@ -473,6 +491,8 @@ EOT;
                     unset($users[$user->getID()]);
                 if ($user->getNotificationSetting(self::NOTIFY_ITEM_ONCE, false, 'mailing')->isOn() && $user->getNotificationSetting(self::NOTIFY_ITEM_ONCE . '_issue_' . $issue->getID(), false, 'mailing')->isOn())
                     unset($users[$user->getID()]);
+                if ($user->getNotificationSetting(framework\Settings::SETTINGS_USER_NOTIFY_ONLY_IN_BOX_WHEN_ACTIVE, false, 'core')->isOn() && $user->isActive())
+                    unset($users[$user->getID()]);
             }
             $mentioned_users = $issue->getMentionedUsers();
             foreach ($mentioned_users as $user)
@@ -482,6 +502,8 @@ EOT;
                 if ($user->getNotificationSetting(self::NOTIFY_MENTIONED, true, 'mailing')->isOff())
                     unset($users[$user->getID()]);
                 if ($user->getNotificationSetting(self::NOTIFY_ITEM_ONCE, false, 'mailing')->isOn() && $user->getNotificationSetting(self::NOTIFY_ITEM_ONCE . '_issue_' . $issue->getID(), false, 'mailing')->isOn())
+                    unset($users[$user->getID()]);
+                if ($user->getNotificationSetting(framework\Settings::SETTINGS_USER_NOTIFY_ONLY_IN_BOX_WHEN_ACTIVE, false, 'core')->isOn() && $user->isActive())
                     unset($users[$user->getID()]);
             }
             return $users;
@@ -515,8 +537,11 @@ EOT;
 
                     foreach ($to_users as $uid => $user)
                     {
-                        if ($user->getNotificationSetting(self::NOTIFY_NEW_ISSUES_MY_PROJECTS, true, 'mailing')->isOff() || !$issue->hasAccess($user))
-                            unset($to_users[$uid]);
+                        if ($user->getNotificationSetting(self::NOTIFY_NEW_ISSUES_MY_PROJECTS, true, 'mailing')->isOff() ||
+                            !$issue->hasAccess($user) ||
+                            !$issue->getCategory() instanceof Category ||
+                            $user->getNotificationSetting(self::NOTIFY_NEW_ISSUES_MY_PROJECTS_CATEGORY . '_' . $issue->getCategory()->getID(), false, 'mailing')->isOff() ||
+                            ($user->getNotificationSetting(framework\Settings::SETTINGS_USER_NOTIFY_ONLY_IN_BOX_WHEN_ACTIVE, false, 'core')->isOn() && $user->isActive())) unset($to_users[$uid]);
                     }
                     $messages = $this->getTranslatedMessages('issuecreate', $parameters, $to_users, $subject);
 
@@ -608,7 +633,7 @@ EOT;
             {
                 if ($user->getNotificationSetting(self::NOTIFY_ITEM_ONCE, false, 'mailing')->isOn())
                 {
-                    $user->setNotificationSetting(self::NOTIFY_ITEM_ONCE . '_issue_' . $issue->getID(), true, 'mailing')->save();
+                    $user->setNotificationSetting(self::NOTIFY_ITEM_ONCE . '_issue_' . $issue->getID(), true, 'mailing');
                 }
             }
         }
@@ -625,7 +650,7 @@ EOT;
             {
                 if ($user->getNotificationSetting(self::NOTIFY_ITEM_ONCE, false, 'mailing')->isOn())
                 {
-                    $user->setNotificationSetting(self::NOTIFY_ITEM_ONCE . '_article_' . $article->getID(), true, 'mailing')->save();
+                    $user->setNotificationSetting(self::NOTIFY_ITEM_ONCE . '_article_' . $article->getID(), true, 'mailing');
                 }
             }
         }
@@ -646,6 +671,8 @@ EOT;
                     foreach ($to_users as $uid => $user)
                     {
                         if (!$issue->hasAccess($user))
+                            unset($to_users[$uid]);
+                        if ($user->getNotificationSetting(framework\Settings::SETTINGS_USER_NOTIFY_ONLY_IN_BOX_WHEN_ACTIVE, false, 'core')->isOn() && $user->isActive())
                             unset($to_users[$uid]);
                     }
                     $this->_markIssueSent($issue, $to_users);
@@ -678,7 +705,7 @@ EOT;
                         $this->_addProjectEmailAddress($message, $issue->getProject());
                         $this->sendMail($message);
                     }
-                    $user->setNotificationSetting(self::NOTIFY_ITEM_ONCE . '_issue_' . $issue->getID(), false, 'mailing')->save();
+                    $user->setNotificationSetting(self::NOTIFY_ITEM_ONCE . '_issue_' . $issue->getID(), false, 'mailing');
                 }
             }
         }
@@ -688,7 +715,7 @@ EOT;
             if (!$event->getSubject() instanceof Issue)
                 return;
 
-            framework\Context::getUser()->setNotificationSetting(self::NOTIFY_ITEM_ONCE . '_issue_' . $event->getSubject()->getID(), false, 'mailing')->save();
+            framework\Context::getUser()->setNotificationSetting(self::NOTIFY_ITEM_ONCE . '_issue_' . $event->getSubject()->getID(), false, 'mailing');
         }
 
         public function listen_loginPane(framework\Event $event)
@@ -719,13 +746,15 @@ EOT;
         {
             $i18n = framework\Context::getI18n();
             $notificationsettings = array();
-            $notificationsettings[self::NOTIFY_SUBSCRIBED_ISSUES] = $i18n->__('Notify by email when there are updates to my subscribed issues');
-            $notificationsettings[self::NOTIFY_SUBSCRIBED_ARTICLES] = $i18n->__('Notify by email when there are updates to my subscribed articles');
-            $notificationsettings[self::NOTIFY_NEW_ISSUES_MY_PROJECTS] = $i18n->__('Notify by email when new issues are created in my project(s)');
-            $notificationsettings[self::NOTIFY_NEW_ARTICLES_MY_PROJECTS] = $i18n->__('Notify by email when new articles are created in my project(s)');
-            $notificationsettings[self::NOTIFY_ITEM_ONCE] = $i18n->__('Only send one email per issue or article until I view the issue or article in my browser');
-            $notificationsettings[self::NOTIFY_UPDATED_SELF] = $i18n->__('Notify by email also when I am the one making the changes');
-            $notificationsettings[self::NOTIFY_MENTIONED] = $i18n->__('Notify by email when I am mentioned in issue or article or their comment');
+            $notificationsettings[self::NOTIFY_SUBSCRIBED_ISSUES] = $i18n->__('Notify when there are updates to my subscribed issues');
+            $notificationsettings[self::NOTIFY_SUBSCRIBED_ARTICLES] = $i18n->__('Notify when there are updates to my subscribed articles');
+            $notificationsettings[self::NOTIFY_NEW_ISSUES_MY_PROJECTS] = $i18n->__('Notify when new issues are created in my project(s)');
+            $notificationsettings[self::NOTIFY_NEW_ISSUES_MY_PROJECTS_CATEGORY] = $i18n->__('New created issues have category');
+            $notificationsettings[self::NOTIFY_NEW_ARTICLES_MY_PROJECTS] = $i18n->__('Notify when new articles are created in my project(s)');
+            $notificationsettings[self::NOTIFY_ITEM_ONCE] = $i18n->__('Only notify once per issue or article until I view the issue or article in my browser');
+            $notificationsettings[self::NOTIFY_UPDATED_SELF] = $i18n->__('Notify also when I am the one making the changes');
+            $notificationsettings[self::NOTIFY_MENTIONED] = $i18n->__('Notify when I am mentioned in issue or article or their comment');
+            $notificationsettings[self::NOTIFY_NOT_WHEN_ACTIVE] = $i18n->__("Don't send email notification if I'm currently logged in and active");
             return $notificationsettings;
         }
 
@@ -747,6 +776,26 @@ EOT;
         public function listen_accountNotificationSettings(framework\Event $event)
         {
             framework\ActionComponent::includeComponent('mailing/accountsettings', array('notificationsettings' => $this->_getNotificationSettings()));
+        }
+
+        public function listen_accountNotificationSettingsThead(framework\Event $event)
+        {
+            framework\ActionComponent::includeComponent('mailing/accountsettings_thead');
+        }
+
+        public function listen_accountNotificationSettingsCell(framework\Event $event)
+        {
+            framework\ActionComponent::includeComponent('mailing/accountsettings_cell', array('notificationsettings' => $this->_getNotificationSettings(), 'key' => $event->getParameter('key')));
+        }
+
+        public function listen_accountNotificationSettingsNotificationCategories(framework\Event $event)
+        {
+            framework\ActionComponent::includeComponent('mailing/accountsettings_notificationcategories', array('categories' => $event->getParameter('categories')));
+        }
+
+        public function listen_accountNotificationSettingsSubscriptions(framework\Event $event)
+        {
+            framework\ActionComponent::includeComponent('mailing/accountsettings_subscriptions');
         }
 
         public function listen_configCreateuserEmail(framework\Event $event)
@@ -778,15 +827,22 @@ EOT;
         {
             $request = $event->getParameter('request');
             $notificationsettings = $this->_getNotificationSettings();
-            foreach ($notificationsettings as $setting => $description)
-            {
-                if ($request->hasParameter('mailing_' . $setting))
-                {
-                    framework\Context::getUser()->setNotificationSetting($setting, true, 'mailing')->save();
+            $category_key = self::NOTIFY_NEW_ISSUES_MY_PROJECTS_CATEGORY;
+
+            foreach ($notificationsettings as $setting => $description) {
+                if ($setting == $category_key) continue;
+                if ($request->hasParameter('mailing_' . $setting)) {
+                    framework\Context::getUser()->setNotificationSetting($setting, true, 'mailing');
+                } else {
+                    framework\Context::getUser()->setNotificationSetting($setting, false, 'mailing');
                 }
-                else
-                {
-                    framework\Context::getUser()->setNotificationSetting($setting, false, 'mailing')->save();
+            }
+
+            foreach ($event->getParameter('categories') as $category_id => $category) {
+                if ($request->hasParameter('mailing_' . $category_key . '_' . $category_id)) {
+                    framework\Context::getUser()->setNotificationSetting($category_key . '_' . $category_id, true, 'mailing');
+                } else {
+                    framework\Context::getUser()->setNotificationSetting($category_key . '_' . $category_id, false, 'mailing');
                 }
             }
         }
@@ -1182,7 +1238,7 @@ EOT;
 
                         if ($user instanceof User)
                         {
-                            if (framework\Context::getUser()->getID() != $user->getID())
+                            if (framework\Context::isCLI() || framework\Context::getUser()->getID() != $user->getID())
                                 framework\Context::switchUserContext($user);
 
                             $message = $account->getMessage($email);
@@ -1267,7 +1323,7 @@ EOT;
                                     {
                                         $filename = $name;
                                     }
-                                    Logging::log('Creating issue attachment ' . $filename . ' from attachment ' . $attachment_no);
+                                    framework\Logging::log('Creating issue attachment ' . $filename . ' from attachment ' . $attachment_no);
                                     echo 'Creating issue attachment ' . $filename . ' from attachment ' . $attachment_no;
                                     $content_type = $attachment['type'] . '/' . $attachment['subtype'];
                                     $file = new File();
@@ -1282,7 +1338,7 @@ EOT;
                                     }
                                     else
                                     {
-                                        Logging::log('Saving file ' . $new_filename . ' with content from attachment ' . $attachment_no);
+                                        framework\Logging::log('Saving file ' . $new_filename . ' with content from attachment ' . $attachment_no);
                                         file_put_contents($new_filename, $attachment['data']);
                                     }
                                     $file->save();
@@ -1302,13 +1358,24 @@ EOT;
                 {
 
                 }
-                if (framework\Context::getUser()->getID() != $current_user->getID())
-                    framework\Context::switchUserContext($current_user);
+                if (!framework\Context::isCLI())
+                    if (framework\Context::getUser()->getID() != $current_user->getID())
+                        framework\Context::switchUserContext($current_user);
             }
             $account->setTimeLastFetched(time());
             $account->setNumberOfEmailsLastFetched($count);
             $account->save();
             return $count;
+        }
+
+        public function getFontAwesomeIcon()
+        {
+            return 'envelope-o';
+        }
+
+        public function getFontAwesomeColor()
+        {
+            return '#555';
         }
 
     }

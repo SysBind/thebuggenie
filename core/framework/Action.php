@@ -11,6 +11,7 @@
      * @package thebuggenie
      * @subpackage mvc
      */
+    use thebuggenie\core\entities\User;
 
     /**
      * Action class used in the MVC part of the framework
@@ -27,17 +28,31 @@
         const AUTHENTICATION_METHOD_RSS_KEY = 'rss_key';
         const AUTHENTICATION_METHOD_APPLICATION_PASSWORD = 'application_password';
         const AUTHENTICATION_METHOD_ELEVATED = 'elevated';
+        const AUTHENTICATION_METHOD_BASIC = 'basic';
 
+        /**
+         * Retrieves authentication method for running an
+         * action. Default method implementation will only detect
+         * whether the CLI is being used, and set the authentiction
+         * method appropriatelly, otherwise defaulting to standard
+         * (core) user authentication.
+         *
+         * Modules implementing their own controller should override
+         * this method if certain actions can be performed by
+         * providing application password, require elevated privileges
+         * etc.
+         *
+         * Use the AUTHENTICATION_METHOD constants from above when
+         * returning or checking the authentication method.
+         *
+         * @return string Authentication method.
+         */
         public function getAuthenticationMethodForAction($action)
         {
             if (Context::isCLI())
-            {
                 return self::AUTHENTICATION_METHOD_CLI;
-            }
-            else
-            {
-                return self::AUTHENTICATION_METHOD_CORE;
-            }
+
+            return self::AUTHENTICATION_METHOD_CORE;
         }
 
         /**
@@ -46,7 +61,7 @@
          * @param string $url The URL to forward to
          * @param integer $code [optional] HTTP status code
          */
-        public function forward($url, $code = 200)
+        public function forward($url, $code = Response::HTTP_STATUS_OK)
         {
             if (Context::getRequest()->isAjaxCall() || Context::getRequest()->getRequestedFormat() == 'json')
             {
@@ -110,6 +125,8 @@
             $this->getResponse()->setContentType('application/json');
             $this->getResponse()->setDecoration(Response::DECORATE_NONE);
 
+            if (is_array($text) && array_key_exists('error', $text)) $this->getResponse()->setHttpStatus(Response::HTTP_STATUS_BAD_REQUEST);
+
             if (is_array($text))
                 array_walk_recursive($text , function(&$item) { $item = iconv('UTF-8', 'UTF-8//IGNORE', $item); });
             else
@@ -168,12 +185,42 @@
         {
             if (Context::getRequest()->isAjaxCall() || Context::getRequest()->getRequestedFormat() == 'json')
             {
-                $this->getResponse()->ajaxResponseText(404, $message);
+                $this->getResponse()->ajaxResponseText(Response::HTTP_STATUS_NOT_FOUND, $message);
             }
 
             $this->message = $message;
-            $this->getResponse()->setHttpStatus(404);
+            $this->getResponse()->setHttpStatus(Response::HTTP_STATUS_NOT_FOUND);
             $this->getResponse()->setTemplate('main/notfound');
+            return false;
+        }
+
+        /**
+         * Sets the response to 304 (Not modified) and exits
+         */
+        public function return304()
+        {
+            $this->getResponse()->setHttpStatus(Response::HTTP_STATUS_NOT_MODIFIED);
+            $this->getResponse()->renderHeaders();
+            exit();
+        }
+
+        /**
+         * Sets response code to 400 (bad request), sending optional
+         * error message to caller.
+         *
+         * @param string $message [optional] Error message to return to caller.
+         */
+        public function return400($message = null)
+        {
+            if (Context::getRequest()->isAjaxCall() || Context::getRequest()->getRequestedFormat() == 'json')
+            {
+                $this->getResponse()->ajaxResponseText(Response::HTTP_STATUS_BAD_REQUEST, $message);
+            }
+
+            $this->message = $message;
+            $this->getResponse()->setHttpStatus(Response::HTTP_STATUS_BAD_REQUEST);
+            $this->getResponse()->setTemplate('main/http400');
+
             return false;
         }
 
@@ -198,23 +245,22 @@
         {
             if (!$condition)
             {
-                $message = ($message === null) ? Context::getI18n()->__("You are not allowed to access this page") : htmlentities($message);
+                $message = ($message === null) ? Context::getI18n()->__("You are either not allowed to access this page or don't have access to perform this action") : $message;
                 if (Context::getUser()->isGuest())
                 {
-                    Context::setMessage('login_message_err', $message);
+                    Context::setMessage('login_message_err', htmlentities($message));
                     Context::setMessage('login_force_redirect', true);
                     Context::setMessage('login_referer', Context::getRouting()->generate(Context::getRouting()->getCurrentRouteName(), Context::getRequest()->getParameters()));
-                    $this->forward(Context::getRouting()->generate('login_page'), 403);
+                    $this->forward(Context::getRouting()->generate('login_page'), Response::HTTP_STATUS_FORBIDDEN);
                 }
                 elseif (Context::getRequest()->isAjaxCall())
                 {
-                    $this->getResponse()->setHttpStatus(403);
-                    throw new \Exception(Context::getI18n()->__("You don't have access to perform this action"));
+                    $this->getResponse()->setHttpStatus(Response::HTTP_STATUS_FORBIDDEN);
+                    throw new \Exception($message);
                 }
                 else
                 {
-                    $this->getResponse()->setHttpStatus(403);
-                    $this->getResponse()->setTemplate('main/forbidden');
+                    throw new \thebuggenie\core\framework\exceptions\ActionNotAllowedException($message);
                 }
             }
         }
@@ -222,6 +268,28 @@
         public function forward403if($condition, $message = null)
         {
             $this->forward403unless(!$condition, $message);
+        }
+
+        /**
+         * Verify that the specified user has a valid membership in the current scope
+         *
+         * @param User $user
+         * @return bool
+         */
+        protected function verifyScopeMembership(User $user)
+        {
+            if (!Context::getScope()->isDefault() && !$user->isGuest() && !$user->isConfirmedMemberOfScope(Context::getScope()))
+            {
+                $route = self::getRouting()->generate('add_scope');
+                if (Context::getRequest()->isAjaxCall())
+                {
+                    return $this->renderJSON(array('forward' => $route));
+                }
+                else
+                {
+                    $this->getResponse()->headerRedirect($route);
+                }
+            }
         }
 
         /**

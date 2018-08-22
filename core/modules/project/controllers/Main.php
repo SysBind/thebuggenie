@@ -9,23 +9,23 @@ use thebuggenie\core\framework,
 
 /**
  * actions for the project module
+ *
+ * @property entities\Client $selected_client
  */
 class Main extends helpers\ProjectActions
 {
 
-    /**
-     * The currently selected client
-     *
-     * @var entities\Client
-     * @access protected
-     * @property $selected_client
-     */
+    protected $anonymous_project_routes = [
+        'getUpdatedProjectKey',
+        'configureProjectSettings'
+    ];
 
     public function getAuthenticationMethodForAction($action)
     {
         switch ($action)
         {
             case 'listIssues':
+            case 'updateIssueDetails':
                 return framework\Action::AUTHENTICATION_METHOD_APPLICATION_PASSWORD;
                 break;
             default:
@@ -245,16 +245,26 @@ class Main extends helpers\ProjectActions
         $this->forward403if(framework\Context::getCurrentProject()->isArchived());
         $this->forward403unless($this->_checkProjectPageAccess('project_scrum'));
         $issue = entities\Issue::getB2DBTable()->selectById((int) $request['story_id']);
-        if ($issue instanceof entities\Issue)
+        try
         {
-            switch ($request['detail'])
+            if ($issue instanceof entities\Issue)
             {
-                case 'color':
-                    $issue->setAgileColor($request['color']);
-                    $issue->save();
-                    return $this->renderJSON(array('failed' => false));
-                    break;
+                switch ($request['detail'])
+                {
+                    case 'color':
+                        $this->forward403unless($issue->canEditColor());
+                        $issue->setAgileColor($request['color']);
+                        $issue->save();
+                        return $this->renderJSON(array('failed' => false, 'text_color' => $issue->getAgileTextColor()));
+                        break;
+                }
             }
+
+        }
+        catch (\Exception $e)
+        {
+            $this->getResponse()->setHttpStatus(400);
+            return $this->renderJSON(array('error' => $e->getMessage()));
         }
         return $this->renderJSON(array('failed' => true, 'error' => framework\Context::getI18n()->__('Invalid user story')));
     }
@@ -576,7 +586,7 @@ class Main extends helpers\ProjectActions
 
     public function runListIssues(framework\Request $request)
     {
-        $filters = array('project_id' => array('o' => '=', 'v' => $this->selected_project->getID()));
+        $filters = array('project_id' => \thebuggenie\core\entities\SearchFilter::createFilter('project_id', array('v' => $this->selected_project->getID(), 'o' => '=')));
         $filter_state = $request->getParameter('state', 'open');
         $filter_issuetype = $request->getParameter('issuetype', 'all');
         $filter_assigned_to = $request->getParameter('assigned_to', 'all');
@@ -1318,8 +1328,9 @@ class Main extends helpers\ProjectActions
 
             $message = ($old_key != $this->selected_project->getKey()) ? framework\Context::getI18n()->__('%IMPORTANT: The project key has changed. Remember to replace the current url with the new project key', array('%IMPORTANT' => '<b>' . framework\Context::getI18n()->__('IMPORTANT') . '</b>')) : '';
 
-            if ($request->hasParameter('project_key'))
+            if ($request->hasParameter('project_key')) {
                 $this->selected_project->setKey($request['project_key']);
+            }
 
             if ($request->hasParameter('use_prefix'))
                 $this->selected_project->setUsePrefix((bool) $request['use_prefix']);
@@ -1404,6 +1415,9 @@ class Main extends helpers\ProjectActions
             if ($request->hasParameter('locked'))
                 $this->selected_project->setLocked((bool) $request['locked']);
 
+            if ($request->hasParameter('issues_lock_type'))
+                $this->selected_project->setIssuesLockType($request['issues_lock_type']);
+
             if ($request->hasParameter('enable_builds'))
                 $this->selected_project->setBuildsEnabled((bool) $request['enable_builds']);
 
@@ -1419,8 +1433,22 @@ class Main extends helpers\ProjectActions
             if ($request->hasParameter('allow_autoassignment'))
                 $this->selected_project->setAutoassign((bool) $request['allow_autoassignment']);
 
-            $this->selected_project->save();
-            return $this->renderJSON(array('message' => $this->getI18n()->__('Settings saved')));
+            if ($request->hasParameter('time_units'))
+                $this->selected_project->setTimeUnits($request['time_units']);
+
+            try {
+                $this->selected_project->save();
+                $response = ['message' => $this->getI18n()->__('Settings saved')];
+
+                if (!$request['project_id'] && !$request['project_key']) {
+                    $response['forward'] = $this->getRouting()->generate('project_dashboard', ['project_key' => $this->selected_project->getKey()]);
+                }
+            } catch (\Exception $e) {
+                $this->getResponse()->setHttpStatus(400);
+                $response = ['message' => $e->getMessage()];
+            }
+
+            return $this->renderJSON($response);
         }
     }
 
@@ -1844,7 +1872,11 @@ class Main extends helpers\ProjectActions
     {
         try
         {
-            $this->selected_project = entities\Project::getB2DBTable()->selectById($request['project_id']);
+            if ($request['project_id']) {
+                $this->selected_project = entities\Project::getB2DBTable()->selectById($request['project_id']);
+            } else {
+                $this->selected_project = new entities\Project();
+            }
         }
         catch (\Exception $e)
         {

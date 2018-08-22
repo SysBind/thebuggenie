@@ -690,7 +690,7 @@
             {
                 if (!strlen($this->_columns))
                 {
-                    if ($columns = \thebuggenie\core\framework\Settings::get('search_scs_'.$this->getTemplateName()))
+                    if ($columns = \thebuggenie\core\framework\Settings::get('search_scs_'.$this->getTemplateName(), 'core', null, framework\Context::getUser()->getID()))
                         $this->_columns = explode(',', $columns);
                     else
                         $this->_columns = self::getDefaultVisibleColumns();
@@ -711,12 +711,12 @@
             return $this->_columns;
         }
 
-        protected function _performSearch()
+        protected function _performSearch($include_deleted = false)
         {
-            list ($this->_issues, $this->_total_number_of_issues) = Issue::findIssues($this->getFilters(), $this->getIssuesPerPage(), $this->getOffset(), $this->getGroupby(), $this->getGrouporder(), $this->getSortFields());
+            list ($this->_issues, $this->_total_number_of_issues) = Issue::findIssues($this->getFilters(), $this->getIssuesPerPage(), $this->getOffset(), $this->getGroupby(), $this->getGrouporder(), $this->getSortFields(), $include_deleted);
         }
 
-        public function getIssues()
+        public function getIssues($include_deleted = false)
         {
             if ($this->hasQuickfoundIssues()) {
                 return $this->_quickfound_issues;
@@ -724,7 +724,7 @@
 
             if ($this->_issues === null)
             {
-                $this->_performSearch();
+                $this->_performSearch($include_deleted);
             }
 
             return $this->_issues;

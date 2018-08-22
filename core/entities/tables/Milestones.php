@@ -23,7 +23,7 @@
      * @package thebuggenie
      * @subpackage tables
      *
-     * @method Milestones getTable() Retrieves an instance of this table
+     * @static @method Milestones getTable() Retrieves an instance of this table
      * @method \thebuggenie\core\entities\Milestone selectById(integer $id) Retrieves a milestone
      *
      * @Table(name="milestones")
@@ -43,6 +43,7 @@
         const REACHED = 'milestones.reacheddate';
         const STARTING = 'milestones.startingdate';
         const SCHEDULED = 'milestones.scheduleddate';
+        const PERCENTAGE_TYPE = 'milestones.percentage_type';
 
         public function _migrateData(\b2db\Table $old_table)
         {

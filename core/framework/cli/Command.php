@@ -21,6 +21,20 @@
     abstract class Command
     {
 
+        const COLOR_BLACK = 29;
+        const COLOR_RED = 31;
+        const COLOR_GREEN = 32;
+        const COLOR_YELLOW = 33;
+        const COLOR_BLUE = 34;
+        const COLOR_MAGENTA = 35;
+        const COLOR_CYAN = 36;
+        const COLOR_WHITE = 37;
+
+        const STYLE_BOLD = 1;
+        const STYLE_UNDERLINE = 4;
+        const STYLE_BLINK = 5;
+        const STYLE_CONCEAL = 8;
+
         protected static $_available_commands = null;
 
         protected static $_provided_arguments = null;
@@ -38,6 +52,12 @@
         protected $_module = null;
         
         protected $_scoped = false;
+
+        /**
+         * Specifies whether the output should be colored or not.
+         *
+         */
+        protected static $_use_color_output = null;
 
         abstract protected function do_execute();
 
@@ -224,14 +244,14 @@
             return array();
         }
 
-        protected function _getCliInput()
+        protected static function _getCliInput()
         {
             return trim(fgets(STDIN));
         }
 
         public function getInputConfirmation()
         {
-            $retval = $this->_getCliInput();
+            $retval = self::_getCliInput();
             return (bool) (mb_strtolower(trim($retval)) == 'yes');
         }
 
@@ -242,13 +262,18 @@
 
         public function askToDecline()
         {
-            $retval = $this->_getCliInput();
+            $retval = self::_getCliInput();
             return !(bool) (mb_strtolower(trim($retval)) == 'no');
         }
 
         public function getInput($default = '')
         {
-            $retval = $this->_getCliInput();
+            return self::getUserInput($default);
+        }
+
+        public static function getUserInput($default = '')
+        {
+            $retval = self::_getCliInput();
             return ($retval == '') ? $default : $retval;
         }
 
@@ -268,18 +293,25 @@
 
         public static function cli_echo($text, $color = 'white', $style = null)
         {
-            if (self::getOS() === 'OS_WIN' || self::getOS() === 'OS_UNKNOWN')
-            {
-                $return_text = $text;
-            }
-            else
+            if (self::useColorOutput() === true)
             {
                 $fg_colors = array('black' => 29, 'red' => 31, 'green' => 32, 'yellow' => 33, 'blue' => 34, 'magenta' => 35, 'cyan' => 36, 'white' => 37);
                 $op_format = array('bold' => 1, 'underline' => 4, 'blink' => 5, 'reverse' => 7, 'conceal' => 8);
 
-                $return_text = "\033[" . $fg_colors[$color];
-                $return_text .= ($style !== null && array_key_exists($style, $op_format)) ? ";" . $op_format[$style] : '';
+                $color = (is_numeric($color)) ? $color : $fg_colors[$color];
+                $return_text = "\033[" . $color;
+
+                if ($style !== null)
+                {
+                    $style = (is_numeric($style)) ? $style : $op_format[$style];
+                    $return_text .= ';' . $style;
+                }
+
                 $return_text .= "m" . $text . "\033[0m";
+            }
+            else
+            {
+                $return_text = $text;
             }
 
             echo $return_text;
@@ -293,7 +325,7 @@
         public static function cliError($title, $exception)
         {
             $trace_elements = null;
-            if ($exception instanceof \Exception)
+            if ($exception instanceof \Exception || $exception instanceof \Error)
             {
                 if ($exception instanceof \thebuggenie\core\framework\exceptions\ActionNotFoundException)
                 {
@@ -398,4 +430,34 @@
             
         }
 
+        /**
+         * Checks if colored output should be used when outputting
+         * messages to terminal.
+         *
+         * Color output needs to be disabled if user has explicitly
+         * requested so, if the operating system is not supported, or
+         * if output is not an interactive terminal (in case of
+         * piping, for example).
+         *
+         *
+         * @return bool
+         *   true, if colored output should be used, false otherwise.
+         */
+        public static function useColorOutput()
+        {
+            // Perform check only if results have not been cached yet.
+            if (self::$_use_color_output === null)
+            {
+                if (getenv("TBG_NO_COLOR") != 1 && self::getOS() !== 'OS_WIN' && self::getOS() !== 'OS_UNKNOWN' && function_exists('posix_isatty') && posix_isatty(STDOUT))
+                {
+                    self::$_use_color_output = true;
+                }
+                else
+                {
+                    self::$_use_color_output = false;
+                }
+            }
+
+            return self::$_use_color_output;
+        }
     }

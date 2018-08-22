@@ -1,16 +1,23 @@
 language: php
 
+dist: trusty
+
 php:
-  # We don't support PHP <5.3, so no need to test that.
-  - 5.3
-  - 5.4
-  - 5.5
+  - 7.0
+  - 7.1
+  - 7.2
+  - hhvm
+  - nightly
+
+matrix:
+  allow_failures:
+    - php: nightly
 
 env:
   - DB=mysql
   - DB=pgsql
 
 before_script:
-  - composer install
+  - composer update
 
-script: phpunit --coverage-text tests/
+script: vendor/phpunit/phpunit/phpunit --coverage-text tests/

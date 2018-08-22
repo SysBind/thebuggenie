@@ -2391,7 +2391,7 @@
             </trans-unit>
             <trans-unit id="5b3b99f23d3be22c417d2122d61576af">
                 <source>If you delete this client, any projects this client is assigned to will be set to having no client</source>
-                <target>Si vous supprimez ce client, l'ensemble des projets pour lesquels ce client est assigné seront définis comme n'ayant pas de client.</target>
+                <target>Si vous supprimez ce client, l\'ensemble des projets pour lesquels ce client est assigné seront définis comme n\'ayant pas de client.</target>
             </trans-unit>
             <trans-unit id="09e5e7f6c1d4cf78e8b5c08acb50e357">
                 <source>ID: %id</source>
@@ -11627,7 +11627,7 @@
             </trans-unit>
             <trans-unit id="9e3ae9e0341f37edf4b7dd5441546510">
                 <source>Please confirm that you want to remove this user from the project team</source>
-                <target>Veuillez confirmer que vous souhaitez supprimer cet utilisateur de l'équipe projet</target>
+                <target>Veuillez confirmer que vous souhaitez supprimer cet utilisateur de l\'équipe projet</target>
             </trans-unit>
             <trans-unit id="cd64c221e26c566964382b65bf16f93d">
                 <source>Assigned teams</source>

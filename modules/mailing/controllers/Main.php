@@ -3,7 +3,8 @@
     namespace thebuggenie\modules\mailing\controllers;
 
     use thebuggenie\core\framework,
-        thebuggenie\modules\mailing\entities;
+        thebuggenie\modules\mailing\entities,
+		thebuggenie\modules\mailing;
 
     class Main extends framework\Action
     {
@@ -21,37 +22,39 @@
 
             try
             {
-                $username = str_replace('%2E', '.', $request['forgot_password_username']);
-                if (!empty($username))
+                $username_or_email = str_replace('%2E', '.', $request['forgot_password_username']);
+
+                // Whether no username or email address was given.
+                if (empty($username_or_email))
                 {
-                    if (($user = \thebuggenie\core\entities\User::getByUsername($username)) instanceof \thebuggenie\core\entities\User)
+                    throw new \Exception($i18n->__('Please enter an username or email address.'));
+                }
+
+                // Try retrieving the user.
+                $user = \thebuggenie\core\entities\User::getByUsername($username_or_email);
+                if (!$user instanceof \thebuggenie\core\entities\User)
+                {
+                    $user = \thebuggenie\core\entities\User::getByEmail($username_or_email, false);
+                }
+
+                if ($user instanceof \thebuggenie\core\entities\User)
+                {
+                    // Whether the user was deleted or is otherwise disabled.
+                    if (! $user->isActivated() || ! $user->isEnabled() || $user->isDeleted())
                     {
-                        if ($user->isActivated() && $user->isEnabled() && !$user->isDeleted())
-                        {
-                            if ($user->getEmail())
-                            {
-                                framework\Context::getModule('mailing')->sendForgottenPasswordEmail($user);
-                                return $this->renderJSON(array('message' => $i18n->__('Please use the link in the email you received')));
-                            }
-                            else
-                            {
-                                throw new \Exception($i18n->__('Cannot find an email address for this user'));
-                            }
-                        }
-                        else
-                        {
-                            throw new \Exception($i18n->__('Forbidden for this username, please contact your administrator'));
-                        }
+                        throw new \Exception($i18n->__('Your user account has been disabled. Please contact your administrator.'));
                     }
-                    else
+
+                    // Whether the user has an email address.
+                    if ($user->getEmail())
                     {
-                        throw new \Exception($i18n->__('This username does not exist'));
+                        // Send password reset email.
+                        framework\Context::getModule('mailing')->sendForgottenPasswordEmail($user);
                     }
                 }
-                else
-                {
-                    throw new \Exception($i18n->__('Please enter an username'));
-                }
+
+                // Protect from user name/email guessing in not telling whether the username/email address exists.
+                return $this->renderJSON(array('message' => $i18n->__("If you are a registered user, we sent you an email. Please use the link in the email you received to reset your password.")));
             }
             catch (\Exception $e)
             {
@@ -255,14 +258,14 @@
                 {
                     if (filter_var(trim($request['mailing_from_address']), FILTER_VALIDATE_EMAIL) !== false)
                     {
-                        framework\Context::getModule('mailing')->saveSetting(Mailing::SETTING_PROJECT_FROM_ADDRESS . $project_id, trim(mb_strtolower($request->getParameter('mailing_from_address'))));
+                        framework\Context::getModule('mailing')->saveSetting(\thebuggenie\modules\mailing\Mailing::SETTING_PROJECT_FROM_ADDRESS . $project_id, trim(mb_strtolower($request->getParameter('mailing_from_address'))));
                         if (trim($request['mailing_from_name']) !== '')
                         {
-                            framework\Context::getModule('mailing')->saveSetting(Mailing::SETTING_PROJECT_FROM_NAME . $project_id, trim($request->getParameter('mailing_from_name')));
+                            framework\Context::getModule('mailing')->saveSetting(\thebuggenie\modules\mailing\Mailing::SETTING_PROJECT_FROM_NAME . $project_id, trim($request->getParameter('mailing_from_name')));
                         }
                         else
                         {
-                            framework\Context::getModule('mailing')->deleteSetting(Mailing::SETTING_PROJECT_FROM_NAME . $project_id);
+                            framework\Context::getModule('mailing')->deleteSetting(\thebuggenie\modules\mailing\Mailing::SETTING_PROJECT_FROM_NAME . $project_id);
                         }
                     }
                     else
@@ -273,8 +276,8 @@
                 }
                 elseif (trim($request['mailing_from_address']) == '')
                 {
-                    framework\Context::getModule('mailing')->deleteSetting(Mailing::SETTING_PROJECT_FROM_ADDRESS . $project_id);
-                    framework\Context::getModule('mailing')->deleteSetting(Mailing::SETTING_PROJECT_FROM_NAME . $project_id);
+                    framework\Context::getModule('mailing')->deleteSetting(\thebuggenie\modules\mailing\Mailing::SETTING_PROJECT_FROM_ADDRESS . $project_id);
+                    framework\Context::getModule('mailing')->deleteSetting(\thebuggenie\modules\mailing\Mailing::SETTING_PROJECT_FROM_NAME . $project_id);
                 }
 
                 return $this->renderJSON(array('failed' => false, 'message' => framework\Context::getI18n()->__('Settings saved')));

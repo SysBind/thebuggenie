@@ -21,8 +21,8 @@
      * @package thebuggenie
      * @subpackage main
      *
-         * @method \thebuggenie\core\entities\tables\Milestones getB2DBTable Returns an instance of the associated table object
-         *
+     * @method static \thebuggenie\core\entities\tables\Milestones getB2DBTable Returns an instance of the associated table object
+     *
      * @Table(name="\thebuggenie\core\entities\tables\Milestones")
      */
     class Milestone extends IdentifiableScoped
@@ -30,6 +30,10 @@
 
         const TYPE_REGULAR = 1;
         const TYPE_SCRUMSPRINT = 2;
+
+        const PERCENTAGE_TYPE_REGULAR = 1;
+        const PERCENTAGE_TYPE_SCRUMSPRINT = 2;
+        const PERCENTAGE_TYPE_PERCENT_COMPLETED = 3;
 
         /**
          * This milestone's project
@@ -176,6 +180,14 @@
          */
         protected $_sort_order = null;
 
+        /**
+         * Percent complete type
+         *
+         * @var string
+         * @Column(type="string", length=200)
+         */
+        protected $_percentage_type;
+
         protected function _construct(\b2db\Row $row, $foreign_key = null)
         {
             $this->_reached = ($this->_reacheddate > 0);
@@ -232,23 +244,27 @@
             return $issues;
         }
 
-        protected function _populatePointsAndTime()
+        /**
+         * @param array $allowed_status_ids
+         */
+        protected function _populatePointsAndTime($allowed_status_ids = array())
         {
             if ($this->_points === null)
             {
                 $this->_points = array('estimated' => 0, 'spent' => 0);
                 $this->_hours = array('estimated' => 0, 'spent' => 0);
+                $this->_minutes = array('estimated' => 0, 'spent' => 0);
 
-                if ($res = tables\Issues::getTable()->getPointsAndTimeByMilestone($this->getID()))
+                if ($res = tables\Issues::getTable()->getPointsAndTimeByMilestone($this->getID(), $allowed_status_ids))
                 {
                     while ($row = $res->getNextRow())
                     {
-                        $points = ($res->get('state') == Issue::STATE_CLOSED && $res->get('estimated_points') > $res->get('spent_points')) ? $res->get('estimated_points') : $res->get('spent_points');
-                        $hours = ($res->get('state') == Issue::STATE_CLOSED && $res->get('estimated_hours') > $res->get('spent_hours')) ? $res->get('estimated_hours') : $res->get('spent_hours');
                         $this->_points['estimated'] += $res->get('estimated_points');
-                        $this->_points['spent'] += $points;
+                        $this->_points['spent'] += $res->get('spent_points');
                         $this->_hours['estimated'] += $res->get('estimated_hours');
-                        $this->_hours['spent'] += round($hours / 100, 2);
+                        $this->_hours['spent'] += round($res->get('spent_hours') / 100, 2);
+                        $this->_minutes['estimated'] += $res->get('estimated_minutes');
+                        $this->_minutes['spent'] += $res->get('spent_minutes');
                     }
                 }
             }
@@ -257,45 +273,109 @@
         /**
          * Get total estimated points for issues assigned to this milestone
          *
+         * @param array $allowed_status_ids
+         *
          * @return integer
          */
-        public function getPointsEstimated()
+        public function getPointsEstimated($allowed_status_ids = array())
         {
-            $this->_populatePointsAndTime();
+            $this->_populatePointsAndTime($allowed_status_ids);
             return (int) $this->_points['estimated'];
         }
 
         /**
          * Get total spent points for issues assigned to this milestone
          *
+         * @param array $allowed_status_ids
+         *
          * @return integer
          */
-        public function getPointsSpent()
+        public function getPointsSpent($allowed_status_ids = array())
         {
-            $this->_populatePointsAndTime();
+            $this->_populatePointsAndTime($allowed_status_ids);
             return (int) $this->_points['spent'];
         }
 
         /**
          * Get total estimated hours for issues assigned to this milestone
          *
+         * @param bool $append_minutes
+         *
          * @return integer
          */
-        public function getHoursEstimated()
+        public function getHoursEstimated($append_minutes = false)
         {
             $this->_populatePointsAndTime();
-            return (int) $this->_hours['estimated'];
+            $hours = (int) $this->_hours['estimated'];
+            return $hours + ($append_minutes ? (int) floor($this->getMinutesEstimated() / 60) : 0);
         }
 
         /**
          * Get total spent hours for issues assigned to this milestone
          *
+         * @param bool $append_minutes
+         *
          * @return integer
          */
-        public function getHoursSpent()
+        public function getHoursSpent($append_minutes = false)
         {
             $this->_populatePointsAndTime();
-            return (int) $this->_hours['spent'];
+            $hours = (int) $this->_hours['spent'];
+            return $hours + ($append_minutes ? (int) floor($this->getMinutesSpent() / 60) : 0);
+        }
+
+        /**
+         * Get total estimated minutes for issues assigned to this milestone
+         *
+         * @param bool $subtract_hours
+         *
+         * @return integer
+         */
+        public function getMinutesEstimated($subtract_hours = false)
+        {
+            $this->_populatePointsAndTime();
+            $minutes = (int) $this->_minutes['estimated'];
+            return $subtract_hours ? $minutes % 60 : $minutes;
+        }
+
+        /**
+         * Get total spent minutes for issues assigned to this milestone
+         *
+         * @param bool $subtract_hours
+         *
+         * @return integer
+         */
+        public function getMinutesSpent($subtract_hours = false)
+        {
+            $this->_populatePointsAndTime();
+            $minutes = (int) $this->_minutes['spent'];
+            return $subtract_hours ? $minutes % 60 : $minutes;
+        }
+
+        /**
+         * Returns the estimated hours and minutes formatted
+         *
+         * @param bool $append_minutes
+         * @param bool $subtract_hours
+         *
+         * @return integer|string
+         */
+        public function getHoursAndMinutesEstimated($append_minutes = false, $subtract_hours = false)
+        {
+            return \thebuggenie\core\entities\common\Timeable::formatHoursAndMinutes($this->getHoursEstimated($append_minutes), $this->getMinutesEstimated($subtract_hours));
+        }
+
+        /**
+         * Returns the spent hours and minutes formatted
+         *
+         * @param bool $append_minutes
+         * @param bool $subtract_hours
+         *
+         * @return integer|string
+         */
+        public function getHoursAndMinutesSpent($append_minutes = false, $subtract_hours = false)
+        {
+            return \thebuggenie\core\entities\common\Timeable::formatHoursAndMinutes($this->getHoursSpent($append_minutes), $this->getMinutesSpent($subtract_hours));
         }
 
         public function clearEstimates()
@@ -412,6 +492,16 @@
         }
 
         /**
+         * Set the milestone percentage type
+         *
+         * @param integer $type
+         */
+        public function setPercentageType($percentage_type)
+        {
+            $this->_percentage_type = $percentage_type;
+        }
+
+        /**
          * Get the milestone type
          *
          * @return integer
@@ -464,6 +554,16 @@
         public function getReachedDate()
         {
             return $this->_reacheddate;
+        }
+
+        /**
+         * Return percent complete type
+         *
+         * @return integer
+         */
+        public function getPercentageType()
+        {
+            return $this->_percentage_type;
         }
 
         /**
@@ -636,29 +736,49 @@
             return date("j", $this->_reacheddate);
         }
 
+        public static function getPercentageTypes()
+        {
+            $i18n = framework\Context::getI18n();
+            return array(
+                self::PERCENTAGE_TYPE_REGULAR => $i18n->__('Based on closed / opened issues'),
+                self::PERCENTAGE_TYPE_SCRUMSPRINT => $i18n->__('Based on spent / estimated points'),
+                self::PERCENTAGE_TYPE_PERCENT_COMPLETED => $i18n->__('Based on issues percent completed')
+            );
+        }
+
         /**
          * Returns the milestones progress
          *
+         * @param array $allowed_status_ids
+         *
          * @return integer
          */
-        public function getPercentComplete()
+        public function getPercentComplete($allowed_status_ids = array())
         {
-            if ($this->getType() == self::TYPE_REGULAR)
+            switch ($this->getPercentageType())
             {
-                return $this->getProject()->getClosedPercentageByMilestone($this->getID());
-            }
-            else
-            {
-                if ($this->getPointsEstimated() > 0)
-                {
-                    $multiplier = 100 / $this->getPointsEstimated();
-                    $pct = $this->getPointsSpent() * $multiplier;
-                }
-                else
-                {
+                case self::PERCENTAGE_TYPE_REGULAR:
+                    $pct = $this->getProject()->getClosedPercentageByMilestone($this->getID(), $allowed_status_ids);
+                    break;
+                case self::PERCENTAGE_TYPE_SCRUMSPRINT:
+                    if ($this->getPointsEstimated() > 0)
+                    {
+                        $multiplier = 100 / $this->getPointsEstimated($allowed_status_ids);
+                        $pct = $this->getPointsSpent($allowed_status_ids) * $multiplier;
+                    }
+                    else
+                    {
+                        $pct = 0;
+                    }
+                    break;
+                case self::PERCENTAGE_TYPE_PERCENT_COMPLETED:
+                    $pct = $this->getProject()->getTotalPercentageByMilestone($this->getID(), $allowed_status_ids);
+                    break;
+                default:
                     $pct = 0;
-                }
+                    break;
             }
+
             return (int) $pct;
         }
 
@@ -667,6 +787,10 @@
          */
         public function updateStatus()
         {
+            if (!$this->getProject() instanceof Project) {
+                return;
+            }
+
             $all_issues_closed = (bool) ($this->countClosedIssues() == $this->countIssues());
             if (!$this->hasReachedDate() && $all_issues_closed)
             {
@@ -749,7 +873,11 @@
             return ($this->getStartingDate() > 0);
         }
 
-        protected function _populateBurndownData()
+        /**
+         * @param bool $append_minutes
+         * @param bool $subtract_hours
+         */
+        protected function _populateBurndownData($append_minutes = false, $subtract_hours = false)
         {
             if ($this->_burndowndata === null)
             {
@@ -772,25 +900,94 @@
                 {
                     $spent_times['hours'][$key] = round($spent_times['hours'][$key] / 100, 2);
                 }
+                $total_estimations_hours = array_sum($estimations['hours']);
+                if (array_sum($spent_times['hours']) > $total_estimations_hours) $total_estimations_hours = array_sum($spent_times['hours']);
+                $prev_key = null;
                 foreach ($estimations['hours'] as $key => $val)
                 {
-                    $burndown['hours'][$key] = (array_key_exists($key, $spent_times['hours'])) ? $val - $spent_times['hours'][$key] : $val;
+                    if (! is_null($prev_key) && (array_key_exists($prev_key, $spent_times['hours'])))
+                    {
+                        $total_estimations_hours -= $spent_times['hours'][$prev_key];
+                    }
+                    else
+                    {
+                        if (isset($spent_times['hours_spent_before']))
+                        {
+                            $spent_times['hours_spent_before'] = round($spent_times['hours_spent_before'] / 100, 2);
+                            $total_estimations_hours -= $spent_times['hours_spent_before'];
+                        }
+                    }
+
+                    $burndown['hours'][$key] = $total_estimations_hours;
+                    $prev_key = $key;
                 }
+
+                $total_estimations_minutes = array_sum($estimations['minutes']);
+                if (array_sum($spent_times['minutes']) > $total_estimations_minutes) $total_estimations_minutes = array_sum($spent_times['minutes']);
+                $prev_key = null;
+                foreach ($estimations['minutes'] as $key => $val)
+                {
+                    if (! is_null($prev_key) && (array_key_exists($prev_key, $spent_times['minutes'])))
+                    {
+                        $total_estimations_minutes -= $spent_times['minutes'][$prev_key];
+                    }
+                    else
+                    {
+                        if (isset($spent_times['minutes_spent_before']))
+                        {
+                            $total_estimations_minutes -= $spent_times['minutes_spent_before'];
+                        }
+                    }
+
+                    $burndown['minutes'][$key] = $total_estimations_minutes;
+                    if ($append_minutes) $burndown['hours'][$key] += (int) floor($total_estimations_minutes / 60);
+                    $prev_key = $key;
+                }
+
+                $total_estimations_points = array_sum($estimations['points']);
+                if (array_sum($spent_times['points']) > $total_estimations_points) $total_estimations_points = array_sum($spent_times['points']);
+                $prev_key = null;
                 foreach ($estimations['points'] as $key => $val)
                 {
-                    $burndown['points'][$key] = (array_key_exists($key, $spent_times['points'])) ? $val - $spent_times['points'][$key] : $val;
+                    if (! is_null($prev_key) && (array_key_exists($prev_key, $spent_times['points'])))
+                    {
+                        $total_estimations_points -= $spent_times['points'][$prev_key];
+                    }
+                    else
+                    {
+                        if (isset($spent_times['points_spent_before']))
+                        {
+                            $total_estimations_points -= $spent_times['points_spent_before'];
+                        }
+                    }
+
+                    $burndown['points'][$key] = $total_estimations_points;
+                    $prev_key = $key;
                 }
+
+                if ($subtract_hours && isset($spent_times['minutes_spent_before'])) $spent_times['minutes_spent_before'] = $spent_times['minutes_spent_before'] % 60;
 
                 $this->_burndowndata = array('estimations' => $estimations, 'spent_times' => $spent_times, 'burndown' => $burndown);
             }
         }
 
-        public function getBurndownData()
+        /**
+         * @param bool $append_minutes
+         * @param bool $subtract_hours
+         *
+         * @return array
+         */
+        public function getBurndownData($append_minutes = false, $subtract_hours = false)
         {
-            $this->_populateBurndownData();
+            $this->_populateBurndownData($append_minutes, $subtract_hours);
             return $this->_burndowndata;
         }
 
+        /**
+         * Whether this milestone is a scrum sprint.
+         * 
+         * @return boolean
+         */
         public function isSprint()
         {
             return (bool) ($this->_itemtype == self::TYPE_SCRUMSPRINT);
@@ -870,11 +1067,21 @@
             $this->_visible_roadmap = $visible;
         }
 
+        /**
+         * Whether the milestone is visible on the project roadmap
+         * 
+         * @return boolean
+         */
         public function getVisibleRoadmap()
         {
             return $this->_visible_roadmap;
         }
 
+        /**
+         * Whether the milestone is visible on the project roadmap
+         * 
+         * @return boolean
+         */
         public function isVisibleRoadmap()
         {
             return $this->getVisibleRoadmap();
@@ -885,21 +1092,41 @@
             $this->_visible_issues = $visible;
         }
 
+        /**
+         * Whether the milestone is available for issues
+         * 
+         * @return boolean
+         */
         public function getVisibleIssues()
         {
             return $this->_visible_issues;
         }
 
+        /**
+         * Whether the milestone is available for issues
+         * 
+         * @return boolean
+         */
         public function isVisibleIssues()
         {
             return $this->getVisibleIssues();
         }
 
+        /**
+         * Whether the milestone has been closed
+         * 
+         * @return boolean
+         */
         public function getClosed()
         {
             return $this->_closed;
         }
 
+        /**
+         * Whether the milestone has been closed
+         * 
+         * @return boolean
+         */
         public function isClosed()
         {
             return $this->getClosed();
@@ -915,9 +1142,50 @@
             $this->_sort_order = $order;
         }
 
+        /**
+         * Sort order of this item
+         * 
+         * @return integer
+         */
         public function getOrder()
         {
             return (int) $this->_sort_order;
+        }
+        
+        public function toJSON($detailed = true)
+        {
+            $returnJSON = array(
+            		'id' => $this->getID(),
+            		'name' => $this->getName(),
+            		'closed' => $this->getClosed(),
+            		'reached' => $this->isReached(),
+            		'visible_issues' => $this->isVisibleIssues(),
+            		'visible_rowdmap' => $this->isVisibleRoadmap()
+            );
+            if($detailed) {
+            	$returnJSON['is_sprint'] = $this->isSprint();
+            	$returnJSON['sort_order'] = $this->getOrder();
+            	$returnJSON['starting'] = $this->isStarting();
+            	$returnJSON['starting_date'] = $this->getStartingDate();
+            	$returnJSON['scheduled'] = $this->isScheduled();
+            	$returnJSON['scheduled_date'] = $this->getScheduledDate();
+            	$returnJSON['current'] = $this->isCurrent();
+            	$returnJSON['overdue'] = $this->isOverdue();
+            	
+            	//$returnJSON['reached'] = $this->isReached();
+            	$returnJSON['reached_date'] = $this->getReachedDate();
+
+            	$returnJSON['issues_count'] = $this->countIssues();
+            	$returnJSON['issues_count_open'] = $this->countOpenIssues();
+            	$returnJSON['issues_count_closed'] = $this->countClosedIssues();
+            	$returnJSON['percent_complete'] = $this->getPercentComplete();
+            	$returnJSON['percentage_type'] = $this->getPercentageType();
+            	
+            	$this->_populatePointsAndTime();
+            	$returnJSON['hours'] = $this->_hours;
+            	$returnJSON['points'] = $this->_points;
+            }
+            return $returnJSON;
         }
 
     }

@@ -24,8 +24,9 @@
         public function componentMilestoneVirtualStatusDetails()
         {
             $this->statuses = \thebuggenie\core\entities\Status::getAll();
+            $this->allowed_status_ids = isset($this->allowed_status_ids) ? $this->allowed_status_ids : array();
             if ($this->milestone instanceof \thebuggenie\core\entities\Milestone)
-                $this->status_details = \thebuggenie\core\entities\tables\Issues::getTable()->getMilestoneDistributionDetails($this->milestone->getID());
+                $this->status_details = \thebuggenie\core\entities\tables\Issues::getTable()->getMilestoneDistributionDetails($this->milestone->getID(), $this->allowed_status_ids);
         }
 
         public function componentRecentActivities()
@@ -61,7 +62,7 @@
             $this->total_spent_points = 0;
             $this->total_estimated_hours = 0;
             $this->total_spent_hours = 0;
-            $this->burndown_data = $this->milestone->getBurndownData();
+            $this->burndown_data = $this->milestone->getBurndownData(true, true);
         }
 
         public function componentDashboardViewProjectInfo()
@@ -156,7 +157,7 @@
 
         public function componentDashboardViewProjectRecentActivities()
         {
-            $this->recent_activities = framework\Context::getCurrentProject()->getRecentActivities(10);
+            $this->recent_activities = framework\Context::getCurrentProject()->getRecentActivities(10, false, null, true);
         }
 
         public function componentDashboardViewProjectDownloads()

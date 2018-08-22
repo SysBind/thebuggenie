@@ -10,6 +10,7 @@
         thebuggenie\modules\publish\entities\Article,
         thebuggenie\modules\publish\entities\tables\UserArticles,
         thebuggenie\modules\publish\entities\tables\Articles;
+    use thebuggenie\modules\publish\entities\tables\ArticleFiles;
 
     /**
      * The wiki class
@@ -53,6 +54,13 @@
             }
         }
 
+        protected function _addAvailablePermissions()
+        {
+            $this->addAvailablePermission(self::PERMISSION_READ_ARTICLE, 'Read all articles');
+            $this->addAvailablePermission(self::PERMISSION_EDIT_ARTICLE, 'Edit all articles');
+            $this->addAvailablePermission(self::PERMISSION_DELETE_ARTICLE, 'Delete any articles');
+        }
+
         protected function _addListeners()
         {
             framework\Event::listen('core', 'index_left', array($this, 'listen_frontpageLeftmenu'));
@@ -69,6 +77,7 @@
             framework\Event::listen('core', 'thebuggenie\core\entities\User::__isArticleStarred', array($this, 'User__isArticleStarred'));
             framework\Event::listen('core', 'thebuggenie\core\entities\User::__addStarredArticle', array($this, 'User__addStarredArticle'));
             framework\Event::listen('core', 'thebuggenie\core\entities\User::__removeStarredArticle', array($this, 'User__removeStarredArticle'));
+            framework\Event::listen('core', 'thebuggenie\core\entities\\tables\Files::getUnattachedFiles', array($this, 'Files__getUnattachedFiles'));
             framework\Event::listen('core', 'upload', array($this, 'listen_upload'));
             framework\Event::listen('core', 'quicksearch_dropdown_firstitems', array($this, 'listen_quicksearchDropdownFirstItems'));
             framework\Event::listen('core', 'quicksearch_dropdown_founditems', array($this, 'listen_quicksearchDropdownFoundItems'));
@@ -78,9 +87,6 @@
         protected function _install($scope)
         {
             framework\Context::setPermission('article_management', 0, 'publish', 0, 1, 0, true, $scope);
-            framework\Context::setPermission('publish_postonglobalbillboard', 0, 'publish', 0, 1, 0, true, $scope);
-            framework\Context::setPermission('publish_postonteambillboard', 0, 'publish', 0, 1, 0, true, $scope);
-            framework\Context::setPermission('manage_billboard', 0, 'publish', 0, 1, 0, true, $scope);
             $this->saveSetting('allow_camelcase_links', 1);
             $this->saveSetting('require_change_reason', 1);
 
@@ -258,15 +264,33 @@
             return mb_substr($matches[0], 1);
         }
 
+        /**
+         * Helper function for obtaining article link during parsing of
+         * an Article.
+         *
+         * @param array $matches Result of regular expression matching. First element should be the article name.
+         * @param \thebuggenie\core\helpers\TextParser $parser Parser used for processing the originating article.
+         *
+         * @return string Fully HTML-encoded link (i.e. <a> tag). If article does not exist, tag will be assigned class "missing_wiki_page".
+         */
         public function getArticleLinkTag($matches, $parser)
         {
             $article_link = $matches[0];
             $parser->addInternalLinkOccurrence($article_link);
             $article_name = $this->getSpacedName($matches[0]);
+
             if (!framework\Context::isCLI())
             {
                 framework\Context::loadLibrary('ui');
-                return link_tag(make_url('publish_article', array('article_name' => $matches[0])), $article_name);
+                $options = [];
+
+                // Assign CSS class to article if it does not exist.
+                if (Articles::getTable()->getArticleByName($matches[0]) === null)
+                {
+                    $options["class"] = "missing_wiki_page";
+                }
+
+                return link_tag(make_url('publish_article', ['article_name' => $matches[0]]), $article_name, $options);
             }
             else
             {
@@ -375,10 +399,10 @@
          */
         public function listen_MenustripLinks(framework\Event $event)
         {
-            $project_url = (framework\Context::isProjectContext()) ? framework\Context::getRouting()->generate('publish_article', array('article_name' => ucfirst(framework\Context::getCurrentProject()->getKey()) . ':MainPage')) : null;
-            $wiki_url = (framework\Context::isProjectContext() && framework\Context::getCurrentProject()->hasWikiURL()) ? framework\Context::getCurrentProject()->getWikiURL() : null;
+            $project_url = ($event->getSubject() instanceof Project) ? framework\Context::getRouting()->generate('publish_article', array('article_name' => ucfirst($event->getSubject()->getKey()) . ':MainPage')) : null;
+            $wiki_url = ($event->getSubject() instanceof Project && $event->getSubject()->hasWikiURL()) ? $event->getSubject()->getWikiURL() : null;
             $url = framework\Context::getRouting()->generate('publish');
-            framework\ActionComponent::includeComponent('publish/menustriplinks', array('url' => $url, 'project_url' => $project_url, 'wiki_url' => $wiki_url, 'selected_tab' => $event->getParameter('selected_tab')));
+            framework\ActionComponent::includeComponent('publish/menustriplinks', array('url' => $url, 'project_url' => $project_url, 'project' => $event->getSubject(), 'wiki_url' => $wiki_url, 'selected_tab' => $event->getParameter('selected_tab')));
         }
 
         public function listen_createNewProject(framework\Event $event)
@@ -572,6 +596,27 @@
             }
             $event->setProcessed();
             $event->setReturnValue(true);
+        }
+
+        /**
+         * Removes an article from the list of flagged articles
+         *
+         * @param framework\Event $event
+         */
+        public function Files__getUnattachedFiles(framework\Event $event)
+        {
+            $event->setProcessed();
+            $event->addToReturnList(ArticleFiles::getTable()->getLinkedFileIds());
+        }
+
+        public function getFontAwesomeIcon()
+        {
+            return 'newspaper-o';
+        }
+
+        public function getFontAwesomeColor()
+        {
+            return '#555';
         }
 
     }

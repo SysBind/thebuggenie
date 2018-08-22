@@ -241,6 +241,16 @@
         }
 
         /**
+         * Alias for getName
+         *
+         * @return string
+         */
+        public function getNameWithUsername()
+        {
+            return $this->getName();
+        }
+
+        /**
          * Set the edition name
          *
          * @param string $name
@@ -261,12 +271,23 @@
             return $this->_dashboards;
         }
 
-        public function toJSON()
+        public function toJSON($detailed = true)
         {
-            return array(
+            $returnJSON = array(
                 'id' => $this->getID(),
-                'name' => $this->getName()
+                'name' => $this->getName(),
+            	'type' => 'team' // This is for distinguishing of assignees & similar "ambiguous" values in JSON.
             );
+            
+            if($detailed) {
+            	 $returnJSON['member_count'] = $this->getNumberOfMembers();
+            	 $returnJSON['members'] = array();
+            	 foreach ($this->getMembers() as $member) {
+            	 	$returnJSON['members'][] = $member->toJSON();
+            	 }
+            }
+            
+            return $returnJSON;
         }
 
     }

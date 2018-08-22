@@ -20,7 +20,7 @@
      * @package thebuggenie
      * @subpackage tables
      *
-     * @method \thebuggenie\core\entities\tables\AgileBoards getTable() Retrieves an instance of this table
+     * @method static \thebuggenie\core\entities\tables\AgileBoards getTable() Retrieves an instance of this table
      * @method \thebuggenie\modules\agile\entities\AgileBoard selectById(integer $id) Retrieves an agile board
      *
      * @Table(name="agileboards")
@@ -40,6 +40,17 @@
             $crit->addWhere($ctn);
 
             return $this->select($crit);
+        }
+
+        public function _migrateData(\b2db\Table $old_table)
+        {
+            if ($old_table instanceof \thebuggenie\core\modules\installation\upgrade_413\AgileBoardsTable)
+            {
+                $crit = $this->getCriteria();
+                $crit->addUpdate('agileboards.issue_field_values', serialize(array()));
+
+                $this->doUpdate($crit);
+            }
         }
 
     }

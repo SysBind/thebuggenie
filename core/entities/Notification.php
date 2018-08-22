@@ -31,6 +31,7 @@
         const TYPE_ISSUE_UPDATED = 'issue_updated';
         const TYPE_ISSUE_COMMENTED = 'issue_commented';
         const TYPE_ISSUE_MENTIONED = 'issue_mentioned';
+        const TYPE_ARTICLE_CREATED = 'article_created';
         const TYPE_ARTICLE_UPDATED = 'article_updated';
         const TYPE_ARTICLE_COMMENTED = 'article_commented';
         const TYPE_ARTICLE_MENTIONED = 'article_mentioned';
@@ -86,6 +87,11 @@
          */
         protected $_user_id;
 
+        /**
+         * @Column(type="integer", length=10)
+         */
+        protected $_shown_at;
+
         protected function _preSave($is_new)
         {
             parent::_preSave($is_new);
@@ -129,6 +135,7 @@
                         case self::TYPE_ISSUE_MENTIONED:
                             $this->_target = \thebuggenie\core\entities\Issue::getB2DBTable()->selectById((int) $this->_target_id);
                             break;
+                        case self::TYPE_ARTICLE_CREATED:
                         case self::TYPE_ARTICLE_UPDATED:
                         case self::TYPE_ARTICLE_MENTIONED:
                             $this->_target = Articles::getTable()->selectById((int) $this->_target_id);
@@ -221,6 +228,63 @@
             $this->_is_read = $is_read;
         }
 
+        public function getShownAt()
+        {
+            return $this->_shown_at;
+        }
 
+        public function isShown()
+        {
+            return (bool) $this->_shown_at;
+        }
+
+        public function setShownAt($shown_at)
+        {
+            $this->_shown_at = $shown_at;
+        }
+
+        public function showOnce()
+        {
+            $this->_shown_at = time();
+        }
+
+        public function getTargetUrl()
+        {
+            switch ($this->getNotificationType())
+            {
+                case self::TYPE_ISSUE_CREATED:
+                case self::TYPE_ISSUE_UPDATED:
+                case self::TYPE_ISSUE_MENTIONED:
+                    $url = make_url('viewissue', array('project_key' => $this->getTarget()->getProject()->getKey(), 'issue_no' => $this->getTarget()->getFormattedIssueNo()), false);
+                    break;
+                case self::TYPE_ISSUE_COMMENTED:
+                    $url = make_url('viewissue', array('project_key' => $this->getTarget()->getTarget()->getProject()->getKey(), 'issue_no' => $this->getTarget()->getTarget()->getFormattedIssueNo()), false).'#comment_'.$this->getTarget()->getID();
+                    break;
+                case self::TYPE_COMMENT_MENTIONED:
+                    if ($this->getTarget()->getTargetType() == \thebuggenie\core\entities\Comment::TYPE_ISSUE)
+                    {
+                        $url = make_url('viewissue', array('project_key' => $this->getTarget()->getTarget()->getProject()->getKey(), 'issue_no' => $this->getTarget()->getTarget()->getFormattedIssueNo()), false).'#comment_'.$this->getTarget()->getID();
+                    }
+                    else
+                    {
+                        $url = make_url('publish_article', array('article_name' => $this->getTarget()->getTarget()->getName()), false).'#comment_'.$this->getTarget()->getID();
+                    }
+                    break;
+                case self::TYPE_ARTICLE_COMMENTED:
+                    $url = make_url('publish_article', array('article_name' => $this->getTarget()->getTarget()->getName()), false).'#comment_'.$this->getTarget()->getID();
+                    break;
+                case self::TYPE_ARTICLE_CREATED:
+                case self::TYPE_ARTICLE_UPDATED:
+                case self::TYPE_ARTICLE_MENTIONED:
+                    $url = make_url('publish_article', array('article_name' => $this->getTarget()->getName()), false);
+                    break;
+                default:
+                    $event = \thebuggenie\core\framework\Event::createNew('core', 'thebuggenie\core\entities\Notification::getTargetUrl', $this);
+                    $event->triggerUntilProcessed();
+                    $url = $event->getReturnValue();
+            }
+
+            return $url;
+        }
 
     }

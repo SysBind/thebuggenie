@@ -1,84 +1,131 @@
+<?php
+
+    $header_name = \thebuggenie\core\framework\Settings::getSiteHeaderName();
+    if ($header_name == '') $header_name = 'The Bug Genie';
+
+?>
 <!DOCTYPE html>
-<html lang="<?php echo \thebuggenie\core\framework\Settings::getHTMLLanguage(); ?>" style="cursor: progress;">
+<html lang="<?= \thebuggenie\core\framework\Settings::getHTMLLanguage(); ?>" style="cursor: progress;">
     <head>
-        <meta charset="<?php echo \thebuggenie\core\framework\Context::getI18n()->getCharset(); ?>">
+        <meta charset="<?= \thebuggenie\core\framework\Context::getI18n()->getCharset(); ?>">
         <?php \thebuggenie\core\framework\Event::createNew('core', 'layout.php::header-begins')->trigger(); ?>
         <meta name="description" content="The bug genie, friendly issue tracking">
         <meta name="keywords" content="thebuggenie friendly issue tracking">
         <meta name="author" content="thebuggenie.com">
+        <meta name="viewport" content="width=device-width,initial-scale=1.0,maximum-scale=1.0,user-scalable=0"/>
         <meta http-equiv="X-UA-Compatible" content="IE=Edge">
-        <title><?php echo ($tbg_response->hasTitle()) ? strip_tags(\thebuggenie\core\framework\Settings::getSiteHeaderName() . ' ~ ' . $tbg_response->getTitle()) : strip_tags(\thebuggenie\core\framework\Settings::getSiteHeaderName()); ?></title>
+        <title><?= ($tbg_response->hasTitle()) ? strip_tags($header_name . ' ~ ' . $tbg_response->getTitle()) : strip_tags(\thebuggenie\core\framework\Settings::getSiteHeaderName()); ?></title>
         <style>
             @font-face {
-              font-family: 'Droid Sans Mono';
-              font-style: normal;
-              font-weight: normal;
-              src: url('<?php echo $webroot; ?>fonts/droid_sans_mono.eot');
-              src: local('Droid Sans Mono'), local('DroidSansMono'), url('<?php echo $webroot; ?>fonts/droid_sans_mono.woff') format('woff'), url('<?php echo $webroot; ?>fonts/droid_sans_mono.ttf') format('truetype');
-            }
-            @font-face {
               font-family: 'Open Sans';
               font-style: normal;
               font-weight: normal;
-              src: url('<?php echo $webroot; ?>fonts/open_sans.eot');
-              src: local('Open Sans'), local('OpenSans'), url('<?php echo $webroot; ?>fonts/open_sans.woff') format('woff'), url('<?php echo $webroot; ?>fonts/open_sans.ttf') format('truetype');
+              src: url('<?= $webroot; ?>fonts/open_sans.eot');
+              src: local('Open Sans'), local('OpenSans'), url('<?= $webroot; ?>fonts/open_sans.woff') format('woff'), url('<?= $webroot; ?>fonts/open_sans.ttf') format('truetype');
             }
             @font-face {
               font-family: 'Open Sans';
               font-style: italic;
               font-weight: normal;
-              src: url('<?php echo $webroot; ?>fonts/open_sans_italic.eot');
-              src: local('Open Sans Italic'), local('OpenSans-Italic'), url('<?php echo $webroot; ?>fonts/open_sans_italic.woff') format('woff'), url('<?php echo $webroot; ?>fonts/open_sans_italic.ttf') format('truetype');
+              src: url('<?= $webroot; ?>fonts/open_sans_italic.eot');
+              src: local('Open Sans Italic'), local('OpenSans-Italic'), url('<?= $webroot; ?>fonts/open_sans_italic.woff') format('woff'), url('<?= $webroot; ?>fonts/open_sans_italic.ttf') format('truetype');
             }
             @font-face {
               font-family: 'Open Sans';
               font-style: normal;
               font-weight: bold;
-              src: url('<?php echo $webroot; ?>fonts/open_sans_bold.eot');
-              src: local('Open Sans Bold'), local('OpenSans-Bold'), url('<?php echo $webroot; ?>fonts/open_sans_bold.woff') format('woff'), url('<?php echo $webroot; ?>fonts/open_sans_bold.ttf') format('truetype');
+              src: url('<?= $webroot; ?>fonts/open_sans_bold.eot');
+              src: local('Open Sans Bold'), local('OpenSans-Bold'), url('<?= $webroot; ?>fonts/open_sans_bold.woff') format('woff'), url('<?= $webroot; ?>fonts/open_sans_bold.ttf') format('truetype');
             }
             @font-face {
               font-family: 'Open Sans';
               font-style: italic;
               font-weight: bold;
-              src: url('<?php echo $webroot; ?>fonts/open_sans_bold_italic.eot');
-              src: local('Open Sans Bold Italic'), local('OpenSans-BoldItalic'), url('<?php echo $webroot; ?>fonts/open_sans_bold_italic.woff') format('woff'), url('<?php echo $webroot; ?>fonts/open_sans_bold_italic.ttf') format('truetype');
+              src: url('<?= $webroot; ?>fonts/open_sans_bold_italic.eot');
+              src: local('Open Sans Bold Italic'), local('OpenSans-BoldItalic'), url('<?= $webroot; ?>fonts/open_sans_bold_italic.woff') format('woff'), url('<?= $webroot; ?>fonts/open_sans_bold_italic.ttf') format('truetype');
             }
         </style>
-        <link rel="shortcut icon" href="<?php echo (\thebuggenie\core\framework\Context::isProjectContext() && \thebuggenie\core\framework\Context::getCurrentProject()->hasSmallIcon()) ? \thebuggenie\core\framework\Context::getCurrentProject()->getSmallIconName() : (\thebuggenie\core\framework\Settings::isUsingCustomFavicon() ? \thebuggenie\core\framework\Settings::getFaviconURL() : image_url('favicon.png')); ?>">
-        <link title="<?php echo (\thebuggenie\core\framework\Context::isProjectContext()) ? __('%project_name search', array('%project_name' => \thebuggenie\core\framework\Context::getCurrentProject()->getName())) : __('%site_name search', array('%site_name' => \thebuggenie\core\framework\Settings::getSiteHeaderName())); ?>" href="<?php echo (\thebuggenie\core\framework\Context::isProjectContext()) ? make_url('project_opensearch', array('project_key' => \thebuggenie\core\framework\Context::getCurrentProject()->getKey())) : make_url('opensearch'); ?>" type="application/opensearchdescription+xml" rel="search">
+        <link rel="shortcut icon" href="<?= (\thebuggenie\core\framework\Context::isProjectContext() && \thebuggenie\core\framework\Context::getCurrentProject()->hasSmallIcon()) ? \thebuggenie\core\framework\Context::getCurrentProject()->getSmallIconName() : (\thebuggenie\core\framework\Settings::isUsingCustomFavicon() ? \thebuggenie\core\framework\Settings::getFaviconURL() : image_url('favicon.png')); ?>">
+        <link title="<?= (\thebuggenie\core\framework\Context::isProjectContext()) ? __('%project_name search', array('%project_name' => \thebuggenie\core\framework\Context::getCurrentProject()->getName())) : __('%site_name search', array('%site_name' => \thebuggenie\core\framework\Settings::getSiteHeaderName())); ?>" href="<?= (\thebuggenie\core\framework\Context::isProjectContext()) ? make_url('project_opensearch', array('project_key' => \thebuggenie\core\framework\Context::getCurrentProject()->getKey())) : make_url('opensearch'); ?>" type="application/opensearchdescription+xml" rel="search">
         <?php foreach ($tbg_response->getFeeds() as $feed_url => $feed_title): ?>
-            <link rel="alternate" type="application/rss+xml" title="<?php echo str_replace('"', '\'', $feed_title); ?>" href="<?php echo $feed_url; ?>">
+            <link rel="alternate" type="application/rss+xml" title="<?= str_replace('"', '\'', $feed_title); ?>" href="<?= $feed_url; ?>">
         <?php endforeach; ?>
+        <?php $rand = substr(md5(microtime()),rand(0,26),5); ?>
+        <?php $minified = ! \thebuggenie\core\framework\Context::isDebugMode() && \thebuggenie\core\framework\Context::isMinifiedAssets() ? '.min' :''; ?>
+        <?php $tbgVersion = \thebuggenie\core\framework\Settings::getVersion(); ?>
         <?php include THEBUGGENIE_PATH . 'themes' . DS . \thebuggenie\core\framework\Settings::getThemeName() . DS . 'theme.php'; ?>
 
         <?php list ($localcss, $externalcss) = $tbg_response->getStylesheets(); ?>
         <?php foreach ($localcss as $css): ?>
+            <?php if ( ! empty($minified)) : $pathinfo = pathinfo($css); $css = $pathinfo['dirname'] . '/' . $pathinfo['filename'] . $minified . '.' . $pathinfo['extension']; endif; ?>
             <link rel="stylesheet" href="<?php print $css; ?>">
         <?php endforeach; ?>
         <?php foreach ($externalcss as $css): ?>
-            <link rel="stylesheet" href="<?php echo $css; ?>">
+            <link rel="stylesheet" href="<?= $css; ?>">
         <?php endforeach; ?>
 
-        <script type="text/javascript" src="<?php echo make_url('home'); ?>js/HackTimer.min.js"></script>
-        <script type="text/javascript" src="<?php echo make_url('home'); ?>js/HackTimer.silent.min.js"></script>
-        <script type="text/javascript" src="<?php echo make_url('home'); ?>js/HackTimerWorker.min.js"></script>
+        <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/font-awesome/4.5.0/css/font-awesome.min.css">
+
+        <script type="text/javascript" src="<?= make_url('home'); ?>js/HackTimer<?= $minified; ?>.js"></script>
+        <script type="text/javascript" src="<?= make_url('home'); ?>js/HackTimerWorker<?= $minified; ?>.js"></script>
         <script>
             var bust = function (path) {
-                return path + '?bust=' + <?php echo (\thebuggenie\core\framework\Context::isDebugMode()) ? ' Math.random()' : "'" . \thebuggenie\core\framework\Settings::getVersion() . "'"; ?>;
+                return path + '.js?bust=<?= (\thebuggenie\core\framework\Context::isDebugMode()) ? $rand : $tbgVersion; ?>';
             };
 
             var require = {
-                baseUrl: '<?php echo make_url('home'); ?>js',
+                waitSeconds: 0,
+                baseUrl: '<?= make_url('home'); ?>js',
                 paths: {
-                    jquery: 'jquery-2.1.3.min',
-                    'jquery-ui': 'jquery-ui.min',
-                    'thebuggenie': bust('thebuggenie.js'),
-                    'thebuggenie/tbg': bust('thebuggenie/tbg.js'),
-                    'thebuggenie/tools': bust('thebuggenie/tools.js'),
-                    'TweenMax': bust('greensock/TweenMax.js'),
-                    'GSDraggable': bust('greensock/utils/Draggable.js'),
-                    'jquery.nanoscroller': bust('jquery.nanoscroller.js')
+                    'jquery': bust('jquery-2.1.3<?= $minified ?>'),
+                    <?php foreach([
+                        'bootstrap-typeahead',
+                        'domReady',
+                        'jquery.animate-enhanced',
+                        'jquery.ba-resize',
+                        'jquery.flot',
+                        'jquery.flot.canvas',
+                        'jquery.flot.categories',
+                        'jquery.flot.crosshair',
+                        'jquery.flot.dashes',
+                        'jquery.flot.errorbars',
+                        'jquery.flot.fillbetween',
+                        'jquery.flot.image',
+                        'jquery.flot.navigate',
+                        'jquery.flot.pie',
+                        'jquery.flot.resize',
+                        'jquery.flot.selection',
+                        'jquery.flot.stack',
+                        'jquery.flot.symbol',
+                        'jquery.flot.threshold',
+                        'jquery.flot.time',
+                        'jquery.markitup',
+                        'jquery.nanoscroller',
+                        'jquery-mousewheel',
+                        'jquery-private',
+                        'jquery-ui',
+                        'lightwindow',
+                        'mention',
+                        'notify',
+                        'spectrum',
+                        'prototype',
+                        'effects',
+                        'controls',
+                        'mention',
+                        'scriptaculous',
+                        'slider',
+                        'sound',
+                        'tablekit',
+                        \thebuggenie\core\framework\Settings::getThemeName() .'/theme',
+                        'thebuggenie',
+                        'thebuggenie/tbg',
+                        'thebuggenie/tools',
+                    ] as $path): ?>
+                    '<?= $path ?>': bust('<?= $path.$minified ?>'),
+                    <?php endforeach; ?>
+                    'TweenMax': bust('greensock/TweenMax<?= $minified ?>'),
+                    'TweenLite': bust('greensock/TweenLite<?= $minified ?>'),
+                    'GSDraggable': bust('greensock/utils/Draggable<?= $minified ?>')
                 },
                 map: {
                     '*': { 'jquery': 'jquery-private' },
@@ -135,38 +182,20 @@
                     'jquery.ui.touch-punch': {
                         deps: ['jquery-ui']
                     },
-                    'jquery.animate-enhanced.min': {
+                    'jquery.animate-enhanced<?= $minified ?>': {
                         deps: ['jquery']
                     },
                      'jquery-ui': {
-                         deps: ['jquery.animate-enhanced.min']
+                         deps: ['jquery.animate-enhanced<?= $minified ?>']
                      },
-                    deps: [<?php echo join(', ', array_map(function ($element) { return "\"{$element}\""; }, $localjs)); ?>]
+                    deps: [<?= join(', ', array_map(function ($element) { return "\"{$element}\""; }, $localjs)); ?>]
                 }
             };
         </script>
-        <script type="text/javascript">
-        //   function startWorker() {
-        //     if(typeof(Worker) !== "undefined") {
-        //       if(typeof(w) == "undefined") {
-        //         wrker = new Worker("<?php echo make_url('home'); ?>js/workers.js");
-        //         wrker.onmessage = function(e) {
-        //           log("Received: " + e.data);
-        //         }
-        //         wrker.postMessage();
-        //       }
-        //       w.onmessage = function(event) {
-        //         document.getElementById("result").innerHTML = event.data;
-        //       };
-        //     } else {
-        //       document.getElementById("result").innerHTML = "Sorry! No Web Worker support.";
-        //     }
-        //   }
-        //   startWorker();
-        </script>
-        <script data-main="thebuggenie" src="<?php echo make_url('home'); ?>js/require.js"></script>
+        <script data-main="thebuggenie" src="<?= make_url('home'); ?>js/require<?= $minified; ?>.js"></script>
+        <script src="<?= make_url('home'); ?>js/promise-7.0.4<?= $minified; ?>.js"></script>
         <?php foreach ($externaljs as $js): ?>
-            <script type="text/javascript" src="<?php echo $js; ?>"></script>
+            <script type="text/javascript" src="<?= $js; ?>"></script>
         <?php endforeach; ?>
           <!--[if lt IE 9]>
               <script src="http://html5shiv.googlecode.com/svn/trunk/html5.js"></script>
@@ -174,15 +203,15 @@
         <?php \thebuggenie\core\framework\Event::createNew('core', 'layout.php::header-ends')->trigger(); ?>
     </head>
     <body id="body">
-        <div id="main_container" class="page-<?php echo \thebuggenie\core\framework\Context::getRouting()->getCurrentRouteName(); ?> cf" data-url="<?php echo make_url('userdata'); ?>">
+        <div id="main_container" class="<?php if (\thebuggenie\core\framework\Context::isProjectContext()) echo 'project-context'; ?> page-<?= \thebuggenie\core\framework\Context::getRouting()->getCurrentRouteName(); ?> cf" data-url="<?= make_url('userdata'); ?>">
             <?php if (!in_array(\thebuggenie\core\framework\Context::getRouting()->getCurrentRouteName(), array('login_page', 'elevated_login_page', 'reset_password'))): ?>
                 <?php \thebuggenie\core\framework\Logging::log('Rendering header'); ?>
                 <?php require THEBUGGENIE_CORE_PATH . 'templates/headertop.inc.php'; ?>
                 <?php \thebuggenie\core\framework\Logging::log('done (rendering header)'); ?>
             <?php endif; ?>
-            <div id="content_container">
+            <div id="content_container" class="cf">
                 <?php \thebuggenie\core\framework\Logging::log('Rendering content'); ?>
-                <?php echo $content; ?>
+                <?= $content; ?>
                 <?php \thebuggenie\core\framework\Logging::log('done (rendering content)'); ?>
             </div>
             <?php \thebuggenie\core\framework\Event::createNew('core', 'layout.php::footer-begins')->trigger(); ?>
@@ -197,16 +226,20 @@
                     TBG = tbgjs;
                     jQuery = jquery;
                     require(['scriptaculous']);
-                    var f_init = function() {TBG.initialize({ basepath: '<?php echo $webroot; ?>', data_url: '<?php echo make_url('userdata'); ?>', autocompleter_url: '<?php echo (\thebuggenie\core\framework\Context::isProjectContext()) ? make_url('project_quicksearch', array('project_key' => \thebuggenie\core\framework\Context::getCurrentProject()->getKey())) : make_url('quicksearch'); ?>'})};
+                    var f_init = function() {TBG.initialize({ basepath: '<?= $webroot; ?>', data_url: '<?= make_url('userdata'); ?>', autocompleter_url: '<?= (\thebuggenie\core\framework\Context::isProjectContext()) ? make_url('project_quicksearch', array('project_key' => \thebuggenie\core\framework\Context::getCurrentProject()->getKey())) : make_url('quicksearch'); ?>'})};
                     <?php if (\thebuggenie\core\framework\Context::isDebugMode()): ?>
                         TBG.debug = true;
-                        TBG.debugUrl = '<?php echo make_url('debugger', array('debug_id' => '___debugid___')); ?>';
+                        TBG.debugUrl = '<?= make_url('debugger', array('debug_id' => '___debugid___')); ?>';
                         <?php
+                            $session_time = \thebuggenie\core\framework\Context::getSessionLoadTime();
+                            $session_time = ($session_time >= 1) ? round($session_time, 2) . 's' : round($session_time * 1000, 1) . 'ms';
                             $load_time = \thebuggenie\core\framework\Context::getLoadTime();
+                            $calculated_load_time = $load_time - \thebuggenie\core\framework\Context::getSessionLoadTime();
                             $load_time = ($load_time >= 1) ? round($load_time, 2) . 's' : round($load_time * 1000, 1) . 'ms';
+                            $calculated_load_time = ($calculated_load_time >= 1) ? round($calculated_load_time, 2) . 's' : round($calculated_load_time * 1000, 1) . 'ms';
                         ?>
-                        TBG.Core.AjaxCalls.push({location: 'Page loaded', time: new Date(), debug_id: '<?php echo \thebuggenie\core\framework\Context::getDebugID(); ?>', loadtime: '<?php echo $load_time; ?>'});
-                        TBG.loadDebugInfo('<?php echo \thebuggenie\core\framework\Context::getDebugID(); ?>', f_init);
+                        TBG.Core.AjaxCalls.push({location: 'Page loaded', time: new Date(), debug_id: '<?= \thebuggenie\core\framework\Context::getDebugID(); ?>', loadtime: '<?= $load_time; ?>', session_loadtime: '<?= $session_time; ?>', calculated_loadtime: '<?= $calculated_load_time; ?>'});
+                        TBG.loadDebugInfo('<?= \thebuggenie\core\framework\Context::getDebugID(); ?>', f_init);
                     <?php else: ?>
                         f_init();
                     <?php endif; ?>

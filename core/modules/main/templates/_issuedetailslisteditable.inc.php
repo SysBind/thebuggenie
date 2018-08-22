@@ -111,14 +111,14 @@
                             <li class="separator"></li>
                             <li class="nohover">
                                 <form id="percent_complete_form" method="post" accept-charset="<?php echo \thebuggenie\core\framework\Context::getI18n()->getCharset(); ?>" action="" onsubmit="TBG.Issues.Field.set('<?php echo make_url('issue_setfield', array('project_key' => $issue->getProject()->getKey(), 'issue_id' => $issue->getID(), 'field' => 'percent_complete')); ?>', 'percent_complete', 'percent_complete');return false;">
-                                    <label for="set_percent"><?php echo __('Percent complete'); ?></label>&nbsp;<input type="text" style="width: 40px;" name="percent" id="set_percent">&percnt;
+                                    <label for="set_percent"><?php echo __('Percent complete'); ?></label>&nbsp;<input type="text" style="width: 40px;" name="percent" id="set_percent" value="<?php echo $issue->getPercentCompleted(); ?>">&percnt;
                                     <input type="submit" value="<?php echo __('Set'); ?>">
                                 </form>
                             </li>
                             <li id="percent_complete_spinning" style="margin-top: 3px; display: none;"><?php echo image_tag('spinning_20.gif', array('style' => 'float: left; margin-right: 5px;')) . '&nbsp;' . __('Please wait'); ?>...</li>
                         </ul>
                     <?php endif; ?>
-                    <div id="issue_percent_complete">
+                    <div id="issue_percent_complete" title="<?php echo __('%percentage % completed', array('%percentage' => $issue->getPercentCompleted())); ?>">
                         <?php include_component('main/percentbar', array('percent' => $issue->getPercentCompleted(), 'height' => 4)); ?>
                     </div>
                 </dd>
@@ -367,7 +367,7 @@
                         <?php include_component('main/issueestimator', array('issue' => $issue, 'field' => 'estimated_time', 'mode' => 'left')); ?>
                     <?php endif; ?>
                     <span id="estimated_time_<?php echo $issue->getID(); ?>_name"<?php if (!$issue->hasEstimatedTime()): ?> style="display: none;"<?php endif; ?>>
-                        <?php echo \thebuggenie\core\entities\Issue::getFormattedTime($issue->getEstimatedTime()); ?>
+                        <?php echo \thebuggenie\core\entities\Issue::getFormattedTime($issue->getEstimatedTime(true, true)); ?>
                     </span>
                     <span class="faded_out" id="no_estimated_time_<?php echo $issue->getID(); ?>"<?php if ($issue->hasEstimatedTime()): ?> style="display: none;"<?php endif; ?>><?php echo __('Not estimated'); ?></span>
                 </dd>
@@ -378,7 +378,7 @@
                 <dt id="spent_time_header"><?php echo __('Time spent'); ?></dt>
                 <dd id="spent_time_content">
                     <span id="spent_time_<?php echo $issue->getID(); ?>_name"<?php if (!$issue->hasSpentTime()): ?> style="display: none;"<?php endif; ?>>
-                        <a href="javascript:void(0)" onclick="TBG.Main.Helpers.Backdrop.show('<?php echo make_url('get_partial_for_backdrop', array('key' => 'issue_spenttimes', 'issue_id' => $issue->getID())); ?>');" id="spent_time_<?php echo $issue->getID(); ?>_value"><?php echo \thebuggenie\core\entities\Issue::getFormattedTime($issue->getSpentTime()); ?></a>
+                        <a href="javascript:void(0)" onclick="TBG.Main.Helpers.Backdrop.show('<?php echo make_url('get_partial_for_backdrop', array('key' => 'issue_spenttimes', 'issue_id' => $issue->getID())); ?>');" id="spent_time_<?php echo $issue->getID(); ?>_value"><?php echo \thebuggenie\core\entities\Issue::getFormattedTime($issue->getSpentTime(true, true)); ?></a>
                     </span>
                     <span class="faded_out" id="no_spent_time_<?php echo $issue->getID(); ?>"<?php if ($issue->hasSpentTime()): ?> style="display: none;"<?php endif; ?>><a href="javascript:void(0)" onclick="TBG.Main.Helpers.Backdrop.show('<?php echo make_url('get_partial_for_backdrop', array('key' => 'issue_spenttimes', 'issue_id' => $issue->getID())); ?>');"><?php echo __('No time spent'); ?></a></span>
                     <div id="estimated_percentbar"<?php if (!($issue->hasEstimatedTime())): ?> style="display: none;"<?php endif; ?>><?php include_component('main/percentbar', array('percent' => $issue->getEstimatedPercentCompleted(), 'height' => 2)); ?></div>
@@ -388,7 +388,7 @@
         </li>
     </ul>
 </fieldset>
-<?php if (! count($fields_list) && ! count($customfields_list)): ?>
+<?php if (count($fields_list) || count($customfields_list)): ?>
     <fieldset>
         <legend onclick="$('issue_details_fieldslist').toggle();"><?php echo __('Issue details'); ?></legend>
         <ul class="issue_details simple_list" id="issue_details_fieldslist">
@@ -403,7 +403,7 @@
                             <?php echo $info['title']; ?>
                         </dt>
                         <dd id="<?php echo $field; ?>_content">
-                            <?php if ($issue->isUpdateable() && $issue->canEditCustomFields() && $info['editable']): ?>
+                            <?php if ($issue->isUpdateable() && $issue->canEditCustomFields($field) && $info['editable']): ?>
                                 <a href="javascript:void(0);" onclick="TBG.Issues.Field.revert('<?php echo make_url('issue_revertfield', array('project_key' => $issue->getProject()->getKey(), 'issue_id' => $issue->getID(), 'field' => $field)); ?>', '<?php echo $field; ?>');" title="<?php echo __('Undo this change'); ?>"><?php echo image_tag('undo.png', array('class' => 'undo')); ?></a>
                                 <?php echo image_tag('spinning_16.gif', array('style' => 'display: none; float: left; margin-right: 5px;', 'id' => $field . '_undo_spinning')); ?>
                                 <a href="javascript:void(0);" class="dropper dropdown_link" title="<?php echo $info['change_tip']; ?>"><?php echo image_tag('tabmenu_dropdown.png', array('class' => 'dropdown')); ?></a>
@@ -457,7 +457,7 @@
                                                 <a href="javascript:void(0);" onclick="TBG.Issues.Field.set('<?php echo make_url('issue_setfield', array('project_key' => $issue->getProject()->getKey(), 'issue_id' => $issue->getID(), 'field' => $field, $field . '_value' => "")); ?>', '<?php echo $field; ?>');"><?php echo $info['clear']; ?></a>
                                             </li>
                                             <li class="separator"></li>
-                                            <li id="customfield_<?php echo $field; ?>_calendar_container"></li>
+                                            <li id="customfield_<?php echo $field; ?>_calendar_container" style="padding: 0;"></li>
                                             <script type="text/javascript">
                                                 require(['domReady', 'thebuggenie/tbg', 'calendarview'], function (domReady, tbgjs, Calendar) {
                                                     domReady(function () {
@@ -582,7 +582,7 @@
                                     case \thebuggenie\core\entities\CustomDatatype::TEAM_CHOICE:
                                         ?>
                                         <span id="<?php echo $field; ?>_name"<?php if (!$info['name_visible']): ?> style="display: none;"<?php endif; ?>>
-                                            <?php echo include_component('main/teamdropdown', array('team' => $info['name'])); ?>
+                                            <?php echo include_component('main/teamdropdown', array('team' => $info['identifiable'])); ?>
                                         </span>
                                         <span class="faded_out" id="no_<?php echo $field; ?>"<?php if (!$info['noname_visible']): ?> style="display: none;"<?php endif; ?>>
                                             <?php echo __('Not determined'); ?>
@@ -677,5 +677,26 @@
         <?php include_component('main/duplicateissues', array('issue' => $issue)); ?>
     </div>
 </fieldset>
+<div style="clear: both; margin-bottom: 5px;"> </div>
+<div class="issue_details_detailed_toggler">
+    <a href="javascript:void(0);" class="button button-silver" onclick="$('issue_details').toggleClassName('detailed');"><?php echo __('Show / hide more details'); ?>&nbsp;&raquo;</a>
+</div>
+<script type="text/javascript">
+    var TBG, jQuery;
+    require(['domReady', 'thebuggenie/tbg', 'jquery', 'jquery.nanoscroller'], function (domReady, tbgjs, jquery, nanoscroller) {
+        domReady(function () {
+            TBG = tbgjs;
+            jQuery = jquery;
+
+            Event.observe(window, 'resize', function() {
+                if (document.viewport.getWidth() > 900) {
+                    $('issue_details').dataset.resizable = true;
+                } else {
+                    $('issue_details').dataset.resizable = undefined;
+                }
+            });
+        });
+    });
+</script>
 <?php \thebuggenie\core\framework\Event::createNew('core', 'viewissue_left_bottom', $issue)->trigger(); ?>
 <div style="clear: both; margin-bottom: 5px;"> </div>

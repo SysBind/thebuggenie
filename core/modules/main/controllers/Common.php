@@ -26,12 +26,24 @@ class Common extends framework\Action
     /**
      * 404 not found page
      *
+     * @Route(name="notfound", url="/404")
      * @param \thebuggenie\core\framework\Request $request
      */
     public function runNotFound(framework\Request $request)
     {
         $this->getResponse()->setHttpStatus(404);
         $message = null;
+    }
+
+    /**
+     * 403 forbidden page
+     *
+     * @param \thebuggenie\core\framework\Request $request
+     */
+    public function runForbidden(framework\Request $request)
+    {
+        $this->getResponse()->setHttpStatus(403);
+        $this->getResponse()->setTemplate('main/forbidden');
     }
 
     /**
@@ -47,6 +59,7 @@ class Common extends framework\Action
         {
             framework\Logging::log('Setting user logout state');
             $this->getUser()->setOffline();
+            $this->getUser()->save();
         }
         framework\Context::logout();
         if ($request->isAjaxCall())

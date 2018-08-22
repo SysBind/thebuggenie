@@ -37,6 +37,7 @@
         const SPENT_WEEKS = 'issue_spenttimes.spent_weeks';
         const SPENT_DAYS = 'issue_spenttimes.spent_days';
         const SPENT_HOURS = 'issue_spenttimes.spent_hours';
+        const SPENT_MINUTES = 'issue_spenttimes.spent_minutes';
         const SPENT_POINTS = 'issue_spenttimes.spent_points';
         const ACTIVITY_TYPE = 'issue_spenttimes.activity_type';
 
@@ -44,6 +45,7 @@
         {
             $points_retarr = array();
             $hours_retarr = array();
+            $minutes_retarr = array();
             if ($startdate && $enddate)
             {
                 $sd = $startdate;
@@ -51,6 +53,7 @@
                 {
                     $points_retarr[mktime(0, 0, 1, date('m', $sd), date('d', $sd), date('Y', $sd))] = array();
                     $hours_retarr[mktime(0, 0, 1, date('m', $sd), date('d', $sd), date('Y', $sd))] = array();
+                    $minutes_retarr[mktime(0, 0, 1, date('m', $sd), date('d', $sd), date('Y', $sd))] = array();
                     $sd += 86400;
                 }
             }
@@ -58,8 +61,15 @@
             if (count($issue_ids))
             {
                 $crit = $this->getCriteria();
+                $points_retarr_keys = array_keys($points_retarr);
+                $hours_retarr_keys = array_keys($hours_retarr);
+                $minutes_retarr_keys = array_keys($minutes_retarr);
+
                 if ($startdate && $enddate)
+                {
+                    $crit->addWhere(self::EDITED_AT, $startdate, Criteria::DB_GREATER_THAN_EQUAL);
                     $crit->addWhere(self::EDITED_AT, $enddate, Criteria::DB_LESS_THAN_EQUAL);
+                }
 
                 $crit->addWhere(self::ISSUE_ID, $issue_ids, Criteria::DB_IN);
                 $crit->addOrderBy(self::EDITED_AT, Criteria::SORT_ASC);
@@ -70,49 +80,106 @@
                     {
                         if ($startdate && $enddate)
                         {
-                            $sd = ($row->get(self::EDITED_AT) >= $startdate) ? $row->get(self::EDITED_AT) : $startdate;
+                            $sd = $row->get(self::EDITED_AT);
                             $date = mktime(0, 0, 1, date('m', $sd), date('d', $sd), date('Y', $sd));
-                            foreach ($points_retarr as $key => &$details)
+                            foreach ($points_retarr_keys as $k => $key)
                             {
                                 if ($key < $date) continue;
-                                $details[$row->get(self::ISSUE_ID)] = $row->get(self::SPENT_POINTS);
+                                if (array_key_exists($k + 1, $points_retarr_keys))
+                                {
+                                    if ($sd >= $key && $sd < $points_retarr_keys[$k + 1])
+                                        $points_retarr[$key][] = $row->get(self::SPENT_POINTS);
+                                }
+                                else
+                                {
+                                    if ($sd >= $key)
+                                        $points_retarr[$key][] = $row->get(self::SPENT_POINTS);
+                                }
                             }
-                            foreach ($hours_retarr as $key => &$details)
+                            foreach ($hours_retarr_keys as $k => $key)
                             {
                                 if ($key < $date) continue;
-                                $details[$row->get(self::ISSUE_ID)] = $row->get(self::SPENT_HOURS);
+                                if (array_key_exists($k + 1, $hours_retarr_keys))
+                                {
+                                    if ($sd >= $key && $sd < $hours_retarr_keys[$k + 1])
+                                        $hours_retarr[$key][] = $row->get(self::SPENT_HOURS);
+                                }
+                                else
+                                {
+                                    if ($sd >= $key)
+                                        $hours_retarr[$key][] = $row->get(self::SPENT_HOURS);
+                                }
+                            }
+                            foreach ($minutes_retarr_keys as $k => $key)
+                            {
+                                if ($key < $date) continue;
+                                if (array_key_exists($k + 1, $minutes_retarr_keys))
+                                {
+                                    if ($sd >= $key && $sd < $minutes_retarr_keys[$k + 1])
+                                        $minutes_retarr[$key][] = $row->get(self::SPENT_MINUTES);
+                                }
+                                else
+                                {
+                                    if ($sd >= $key)
+                                        $minutes_retarr[$key][] = $row->get(self::SPENT_MINUTES);
+                                }
                             }
                         }
                         else
                         {
-                            $hours_retarr[$row->get(self::ISSUE_ID)] = $row->get(self::SPENT_HOURS);
-                            $points_retarr[$row->get(self::ISSUE_ID)] = $row->get(self::SPENT_POINTS);
+                            if (!isset($hours_retarr[$row->get(self::ISSUE_ID)])) $hours_retarr[$row->get(self::ISSUE_ID)] = array();
+                            if (!isset($points_retarr[$row->get(self::ISSUE_ID)])) $hours_retarr[$row->get(self::ISSUE_ID)] = array();
+                            if (!isset($minutes_retarr[$row->get(self::ISSUE_ID)])) $minutes_retarr[$row->get(self::ISSUE_ID)] = array();
+                            if (!isset($points_retarr[$row->get(self::ISSUE_ID)])) $minutes_retarr[$row->get(self::ISSUE_ID)] = array();
+                            $hours_retarr[$row->get(self::ISSUE_ID)][] = $row->get(self::SPENT_HOURS);
+                            $minutes_retarr[$row->get(self::ISSUE_ID)][] = $row->get(self::SPENT_MINUTES);
+                            $points_retarr[$row->get(self::ISSUE_ID)][] = $row->get(self::SPENT_POINTS);
                         }
                     }
                 }
             }
 
+            foreach ($points_retarr as $key => $vals)
+                $points_retarr[$key] = (count($vals)) ? array_sum($vals) : 0;
+
+            foreach ($hours_retarr as $key => $vals)
+                $hours_retarr[$key] = (count($vals)) ? array_sum($vals) : 0;
+
+            foreach ($minutes_retarr as $key => $vals)
+                $minutes_retarr[$key] = (count($vals)) ? array_sum($vals) : 0;
+
+            $returnarr = array('points' => $points_retarr, 'hours' => $hours_retarr, 'minutes' => $minutes_retarr);
+
             if ($startdate && $enddate)
             {
-                foreach ($points_retarr as $key => $vals)
-                    $points_retarr[$key] = (count($vals)) ? array_sum($vals) : 0;
+                $crit2 = $this->getCriteria();
+                $crit2->addSelectionColumn(self::SPENT_POINTS, 'spent_points', Criteria::DB_SUM);
+                $crit2->addSelectionColumn(self::SPENT_HOURS, 'spent_hours', Criteria::DB_SUM);
+                $crit2->addSelectionColumn(self::SPENT_MINUTES, 'spent_minutes', Criteria::DB_SUM);
+                $crit2->addWhere(self::EDITED_AT, $startdate, Criteria::DB_LESS_THAN);
 
-                foreach ($hours_retarr as $key => $vals)
-                    $hours_retarr[$key] = (count($vals)) ? array_sum($vals) : 0;
+                if (count($issue_ids)) $crit2->addWhere(self::ISSUE_ID, $issue_ids, Criteria::DB_IN);
+
+                if ($res2 = $this->doSelectOne($crit2))
+                {
+                    $returnarr['points_spent_before'] = $res2->get('spent_points');
+                    $returnarr['hours_spent_before'] = $res2->get('spent_hours');
+                    $returnarr['minutes_spent_before'] = $res2->get('spent_minutes');
+                }
             }
 
-            return array('points' => $points_retarr, 'hours' => $hours_retarr);
+            return $returnarr;
         }
-        
+
         public function getAllSpentTimesForFixing()
         {
             $crit = $this->getCriteria();
             $crit->addOrderBy(self::ISSUE_ID, Criteria::SORT_ASC);
             $crit->addOrderBy(self::ID, Criteria::SORT_ASC);
-            
+
             $res = $this->doSelect($crit);
             $ret_arr = array();
-            
+
             if ($res)
             {
                 while ($row = $res->getNextRow())
@@ -120,19 +187,20 @@
                     $ret_arr[$row[self::ISSUE_ID]][] = $row;
                 }
             }
-            
+
             return $ret_arr;
         }
-        
+
         public function fixRow($row, $prev_times)
         {
             $crit = $this->getCriteria();
             $crit->addUpdate(self::SPENT_POINTS, $row[self::SPENT_POINTS] - $prev_times['points']);
+            $crit->addUpdate(self::SPENT_MINUTES, $row[self::SPENT_MINUTES] - $prev_times['minutes']);
             $crit->addUpdate(self::SPENT_HOURS, $row[self::SPENT_HOURS] - $prev_times['hours']);
             $crit->addUpdate(self::SPENT_DAYS, $row[self::SPENT_DAYS] - $prev_times['days']);
             $crit->addUpdate(self::SPENT_WEEKS, $row[self::SPENT_WEEKS] - $prev_times['weeks']);
             $crit->addUpdate(self::SPENT_MONTHS, $row[self::SPENT_MONTHS] - $prev_times['months']);
-            
+
             $this->doUpdateById($crit, $row[self::ID]);
         }
 
@@ -150,6 +218,7 @@
             $crit = $this->getCriteria();
             $crit->addWhere(self::ISSUE_ID, $issue_id);
             $crit->addSelectionColumn(self::SPENT_POINTS, 'points', Criteria::DB_SUM);
+            $crit->addSelectionColumn(self::SPENT_MINUTES, 'minutes', Criteria::DB_SUM);
             $crit->addSelectionColumn(self::SPENT_HOURS, 'hours', Criteria::DB_SUM);
             $crit->addSelectionColumn(self::SPENT_DAYS, 'days', Criteria::DB_SUM);
             $crit->addSelectionColumn(self::SPENT_MONTHS, 'months', Criteria::DB_SUM);

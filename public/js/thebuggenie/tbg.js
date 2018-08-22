@@ -1,5 +1,5 @@
-define(['prototype', 'effects', 'controls', 'scriptaculous', 'jquery', 'TweenMax', 'GSDraggable', 'jquery-ui', 'jquery.markitup', 'spectrum'],
-    function (prototype, effects, controls, scriptaculous, jQuery, TweenMax, GSDraggable) {
+define(['prototype', 'effects', 'controls', 'scriptaculous', 'jquery', 'TweenMax', 'GSDraggable', 'notify', 'jquery-ui', 'jquery.markitup', 'spectrum'],
+    function (prototype, effects, controls, scriptaculous, jQuery, TweenMax, GSDraggable, Notify) {
 
         var TBG = {
             Core: {
@@ -19,7 +19,9 @@ define(['prototype', 'effects', 'controls', 'scriptaculous', 'jquery', 'TweenMax
                     Backdrop: {}
                 },
                 Profile: {},
-                Notifications: {},
+                Notifications: {
+                    Web: {}
+                },
                 Dashboard: {
                     views: [],
                     View: {}
@@ -206,24 +208,22 @@ define(['prototype', 'effects', 'controls', 'scriptaculous', 'jquery', 'TweenMax
          * Monitors viewport scrolling to adapt fixed positioners
          */
         TBG.Core._scrollWatcher = function () {
-            var vhc = $('viewissue_header_container');
-            if (vhc) {
+            var vihc = $('viewissue_header_container');
+            if (vihc) {
                 var iv = $('issue_view');
                 var y = document.viewport.getScrollOffsets().top;
-                var vihc = $('viewissue_header_container');
-                var vihcl = vihc.getLayout();
-                var compare_coord = (vihc.hasClassName('fixed')) ? iv.offsetTop : vihc.offsetTop;
+                var compare_coord = (vihc.hasClassName('fixed')) ? iv.offsetTop - 15 : vihc.offsetTop;
                 if (y >= compare_coord) {
-                    $('issue_main_container').setStyle({marginTop: vihcl.get('height')+vihcl.get('margin-top')+vihcl.get('margin-bottom')+'px'});
-                    $('issue_details_container').setStyle({marginTop: vihcl.get('height')+vihcl.get('margin-top')+vihcl.get('margin-bottom')+'px'});
-                    vhc.addClassName('fixed');
+                    $('issue_main_container').addClassName('scroll-top');
+                    $('issue_details_container').addClassName('scroll-top');
+                    vihc.addClassName('fixed');
                     $('workflow_actions').addClassName('fixed');
                     if ($('votes_additional').visible() && $('votes_additional').hasClassName('visible')) $('votes_additional').hide();
                     if ($('user_pain_additional').visible() && $('user_pain_additional').hasClassName('visible')) $('user_pain_additional').hide();
-                    var vhc_layout = vhc.getLayout();
+                    var vhc_layout = vihc.getLayout();
                     var vhc_height = vhc_layout.get('height') + vhc_layout.get('padding-top') + vhc_layout.get('padding-bottom');
                     if (y >= $('viewissue_comment_count').offsetTop) {
-                        if ($('comment_add_button') != undefined) {
+                        if ($('comment_add_button') != undefined && !$('comment_add_button').hasClassName('immobile')) {
                             var button = $('comment_add_button').remove();
                             $('workflow_actions').down('ul').insert(button);
                         }
@@ -232,13 +232,13 @@ define(['prototype', 'effects', 'controls', 'scriptaculous', 'jquery', 'TweenMax
                         $('add_comment_button_container').update(button);
                     }
                 } else {
-                    $('issue_main_container').setStyle({marginTop: 0});
-                    $('issue_details_container').setStyle({marginTop: 0});
-                    vhc.removeClassName('fixed');
+                    $('issue_main_container').removeClassName('scroll-top');
+                    $('issue_details_container').removeClassName('scroll-top');
+                    vihc.removeClassName('fixed');
                     $('workflow_actions').removeClassName('fixed');
                     if (! $('votes_additional').visible() && $('votes_additional').hasClassName('visible')) $('votes_additional').show();
                     if (! $('user_pain_additional').visible() && $('user_pain_additional').hasClassName('visible')) $('user_pain_additional').show();
-                    if ($('comment_add_button') != undefined) {
+                    if ($('comment_add_button') != undefined && !$('comment_add_button').hasClassName('immobile')) {
                         var button = $('comment_add_button').remove();
                         $('add_comment_button_container').update(button);
                     }
@@ -437,6 +437,7 @@ define(['prototype', 'effects', 'controls', 'scriptaculous', 'jquery', 'TweenMax
             document.observe('keydown', TBG.Core._escapeWatcher);
 
             TBG.Core.Pollers.Callbacks.dataPoller();
+            TBG.Main.Profile.toggleNotifications(false);
             TBG.OpenID.init();
             // Mimick browser scroll to element with id as hash once header get 'fixed' class
             // from _scrollWatcher method.
@@ -500,15 +501,17 @@ define(['prototype', 'effects', 'controls', 'scriptaculous', 'jquery', 'TweenMax
             }
         };
 
-        TBG.Main.Profile.toggleNotifications = function () {
+        TBG.Main.Profile.toggleNotifications = function (toggle_classes) {
             var un = $('user_notifications');
             var unc = $('user_notifications_container');
-            unc.toggleClassName('active');
+            if (! un || ! unc) return false;
+            if (toggle_classes == null) toggle_classes = true;
+            if (toggle_classes) unc.toggleClassName('active');
             if (un.hasClassName('active')) {
                 un.removeClassName('active');
             } else {
                 un.style.right = (jQuery(window).width() - (jQuery('#user_notifications_container').offset().left + jQuery('#user_notifications_container').outerWidth()) - parseInt(jQuery('#user_notifications').css('border-right-width'), 10)) + 'px';
-                un.addClassName('active');
+                if (toggle_classes) un.addClassName('active');
                 if ($('user_notifications_list').childElements().size() == 0) {
                     TBG.Main.Helpers.ajax($('user_notifications_list').dataset.notificationsUrl, {
                         url_method: 'get',
@@ -809,9 +812,11 @@ define(['prototype', 'effects', 'controls', 'scriptaculous', 'jquery', 'TweenMax
                         $('tbg___DEBUGINFO___indicator').hide();
                         var d = new Date(),
                             d_id = response.getHeader('x-tbg-debugid'),
-                            d_time = response.getHeader('x-tbg-loadtime');
+                            d_time = response.getHeader('x-tbg-loadtime'),
+                            d_session_time = response.getHeader('x-tbg-sessiontime'),
+                            d_calculated_time = response.getHeader('x-tbg-calculatedtime');
 
-                        TBG.Core.AjaxCalls.push({location: url, time: d, debug_id: d_id, loadtime: d_time});
+                        TBG.Core.AjaxCalls.push({location: url, time: d, debug_id: d_id, loadtime: d_time, session_loadtime: d_session_time, calculated_loadtime: d_calculated_time });
                         TBG.updateDebugInfo();
                     }
                     $(options.loading.indicator).hide();
@@ -836,7 +841,7 @@ define(['prototype', 'effects', 'controls', 'scriptaculous', 'jquery', 'TweenMax
                     return (time < 10) ? '0' + time : time;
                 };
                 TBG.Core.AjaxCalls.each(function (info) {
-                    var content = '<li><span class="badge timestamp">' + ct(info.time.getHours()) + ':' + ct(info.time.getMinutes()) + ':' + ct(info.time.getSeconds()) + '.' + ct(info.time.getMilliseconds()) + '</span><span class="badge timing">' + info.loadtime + '</span><span class="partial">' + info.location + '</span> <a class="button button-silver" style="float: right;" href="javascript:void(0);" onclick="TBG.loadDebugInfo(\'' + info.debug_id + '\');">Debug</a></li>';
+                    var content = '<li><span class="badge timestamp">' + ct(info.time.getHours()) + ':' + ct(info.time.getMinutes()) + ':' + ct(info.time.getSeconds()) + '.' + ct(info.time.getMilliseconds()) + '</span><span class="badge timing"><i class="fa fa-clock-o"></i>' + info.loadtime + '</span><span class="badge timing session" title="Time spent by php loading session data"><i class="fa fa-hdd-o"></i>' + info.session_loadtime + '</span><span class="badge timing calculated" title="Calculated load time, excluding session load time"><i class="fa fa-calculator"></i>' + info.calculated_loadtime + '</span><span class="partial">' + info.location + '</span> <a class="button button-silver" style="float: right;" href="javascript:void(0);" onclick="TBG.loadDebugInfo(\'' + info.debug_id + '\');">Debug</a></li>';
                     lai.insert(content, 'top');
                 });
             }
@@ -1073,6 +1078,7 @@ define(['prototype', 'effects', 'controls', 'scriptaculous', 'jquery', 'TweenMax
                                 $('viewissue_no_uploaded_files').hide();
                             }
                         }
+                        $('comments_box').insert({top: json.comments});
                     }
                 },
                 complete: {
@@ -1101,7 +1107,7 @@ define(['prototype', 'effects', 'controls', 'scriptaculous', 'jquery', 'TweenMax
             if (file.type.indexOf("image") == 0) {
                 isimage = true;
             }
-            elm += '<label>' + ful.dataset.filenameLabel + '</label><span class="filename">' + file.name + '</span> <span class="filesize">' + fileSize + '</span><br><label>' + ful.dataset.descriptionLabel + '</label><input type="text" class="file_description" value="" placeholder="' + ful.dataset.descriptionPlaceholder + '"> <span class="progress"></span></li>';
+            elm += '<label>' + ful.dataset.filenameLabel + '</label><span class="filename">' + file.name + '</span> <span class="filesize">' + fileSize + '</span><br><label>' + ful.dataset.descriptionLabel + '</label><input type="text" class="file_description" value="" placeholder="' + ful.dataset.descriptionPlaceholder + '"> <div class="progress_container"><span class="progress"></span></div></li>';
             ful.insert(elm);
             var inserted_elm = $('file_upload_list').childElements().last();
             if (isimage) {
@@ -1114,7 +1120,7 @@ define(['prototype', 'effects', 'controls', 'scriptaculous', 'jquery', 'TweenMax
             }
             var progress_elm = inserted_elm.down('.progress');
             var formData = new FormData();
-            formData.append(file.name, file);
+            formData.append(file.name.replace('[', '(').replace(']', ')'), file);
 
             var xhr = new XMLHttpRequest();
             xhr.open('POST', url, true);
@@ -1195,7 +1201,11 @@ define(['prototype', 'effects', 'controls', 'scriptaculous', 'jquery', 'TweenMax
                     }
                 },
                 success: {
-                    update: 'fullpage_backdrop_content'
+                    update: 'fullpage_backdrop_content',
+                    callback: function () {
+                        $('reportissue_container').removeClassName('large');
+                        $('reportissue_container').removeClassName('huge');
+                    }
                 },
                 complete: {
                     callback: function () {
@@ -1334,7 +1344,10 @@ define(['prototype', 'effects', 'controls', 'scriptaculous', 'jquery', 'TweenMax
         TBG.Main.Profile.updateInformation = function (url) {
             TBG.Main.Helpers.ajax(url, {
                 form: 'profile_information_form',
-                loading: {indicator: 'profile_save_indicator'}
+                loading: {indicator: 'profile_save_indicator'},
+                success: {callback: function () {
+                    ($('profile_use_gravatar_yes').checked) ? $('gravatar_change').show() : $('gravatar_change').hide();
+                }}
             });
         };
 
@@ -1348,10 +1361,7 @@ define(['prototype', 'effects', 'controls', 'scriptaculous', 'jquery', 'TweenMax
         TBG.Main.Profile.updateSettings = function (url) {
             TBG.Main.Helpers.ajax(url, {
                 form: 'profile_settings_form',
-                loading: {indicator: 'profile_notificationsettings_save_indicator'},
-                success: {callback: function () {
-                    ($('profile_use_gravatar_yes').checked) ? $('gravatar_change').show() : $('gravatar_change').hide();
-                }}
+                loading: {indicator: 'profile_settings_save_indicator'}
             });
         };
 
@@ -1531,7 +1541,13 @@ define(['prototype', 'effects', 'controls', 'scriptaculous', 'jquery', 'TweenMax
         TBG.Main.Dashboard.initializeSorting = function ($) {
             $('.dashboard_column.jsortable').sortable({
                 handle: '.dashboardhandle',
-                connectWith: '.dashboard_column'
+                connectWith: '.dashboard_column',
+                items: '.dashboard_view_container',
+                helper: function(event, ui){
+                    var $clone =  $(ui).clone();
+                    $clone .css('position','absolute');
+                    return $clone.get(0);
+                }
             }).bind('sortupdate', TBG.Main.Dashboard.sort);
         };
 
@@ -1657,16 +1673,46 @@ define(['prototype', 'effects', 'controls', 'scriptaculous', 'jquery', 'TweenMax
         TBG.Main.setToggleState = function (url, state) {
             url += '/' + (state ? '1' : 0);
             TBG.Main.Helpers.ajax(url, {});
-        }
+        };
 
         TBG.Main.Comment.showPost = function () {
             $$('.comment_editor').each(Element.hide);
             $('comment_add_button').hide();
             $('comment_add').show();
             $('comment_bodybox').focus();
-        }
+        };
 
-        TBG.Main.Comment.remove = function (url, comment_id) {
+        TBG.Main.Comment.toggleOrder = function (target_type, target_id) {
+            TBG.Main.Helpers.ajax($('main_container').dataset.url, {
+                url_method: 'post',
+                loading: {
+                    indicator: 'comments_loading_indicator'
+                },
+                params: '&say=togglecommentsorder',
+                success: {
+                    callback: function () {
+                        TBG.Main.Comment.reloadAll(target_type, target_id);
+                    }
+                }
+            });
+        };
+
+        TBG.Main.Comment.reloadAll = function (target_type, target_id) {
+            TBG.Main.Helpers.ajax($('main_container').dataset.url, {
+                url_method: 'get',
+                loading: {
+                    indicator: 'comments_loading_indicator'
+                },
+                params: '&say=loadcomments&target_type='+target_type+'&target_id='+target_id,
+                success: {
+                    callback: function (json) {
+                        $('comments_box').update(json.comments);
+                    }
+                }
+            });
+        };
+
+        TBG.Main.Comment.remove = function (url, comment_id, commentcount_span) {
             TBG.Main.Helpers.ajax(url, {
                 loading: {
                     indicator: 'dialog_indicator'
@@ -1676,6 +1722,7 @@ define(['prototype', 'effects', 'controls', 'scriptaculous', 'jquery', 'TweenMax
                     callback: function () {
                         TBG.Main.Helpers.Dialog.dismiss();
                         if ($('comments_box').childElements().size() == 0) $('comments_none').show();
+                        $(commentcount_span).update($('comments_box').childElements().size());
                     }
                 }
             });
@@ -1710,8 +1757,8 @@ define(['prototype', 'effects', 'controls', 'scriptaculous', 'jquery', 'TweenMax
                     hide: ['comment_add_indicator', 'comment_add'],
                     show: ['comment_add_button', 'comment_add_controls'],
                     clear: 'comment_bodybox',
-                    update: {element: 'comments_box', insertion: true, from: 'comment_data'},
                     callback: function (json) {
+                        $('comments_box').insert({top: json.comment_data});
                         if ($('comment_form').serialize(true).comment_save_changes == '1') {
                             window.location = json.continue_url;
                         } else if ($('comments_box').childElements().size() != 0) {
@@ -1737,9 +1784,9 @@ define(['prototype', 'effects', 'controls', 'scriptaculous', 'jquery', 'TweenMax
                 success: {
                     hide: ['comment_reply_' + reply_comment_id],
                     clear: 'comment_reply_bodybox_' + reply_comment_id,
-                    update: {element: 'comments_box', insertion: true, from: 'comment_data'},
                     show: ['comment_reply_controls_' + reply_comment_id, 'comment_add_button'],
                     callback: function (json) {
+                        $('comments_box').insert({top: json.comment_data});
                         $('comment_reply_visibility_' + reply_comment_id).setValue(1);
                     }
                 },
@@ -1914,7 +1961,7 @@ define(['prototype', 'effects', 'controls', 'scriptaculous', 'jquery', 'TweenMax
                 if (section == 'register') {
                     $('fieldusername').focus();
                 } else if (section == 'regular_login_container') {
-                    $('tbg3_username').focus();
+                    $('tbg_username').focus();
                 }
             }, 250);
         };
@@ -2067,6 +2114,20 @@ define(['prototype', 'effects', 'controls', 'scriptaculous', 'jquery', 'TweenMax
             });
         };
 
+        TBG.Project.Commits.viewIssueUpdate = function (url) {
+            TBG.Main.Helpers.ajax(url, {
+                url_method: 'post',
+                additional_params: "offset=" + $('commits_offset').getValue() + "&limit=" + $('commits_limit').getValue(),
+                loading: {
+                    indicator: 'commits_indicator',
+                    hide: 'commits_more_link'
+                },
+                success: {
+                    update: {element: 'viewissue_vcs_integration_commits', insertion: true}
+                }
+            });
+        };
+
         TBG.Project.Scrum.Sprint.add = function (url, assign_url)
         {
             TBG.Main.Helpers.ajax(url, {
@@ -2212,7 +2273,12 @@ define(['prototype', 'effects', 'controls', 'scriptaculous', 'jquery', 'TweenMax
                 update: TBG.Project.Planning.sortMilestoneIssues,
                 receive: TBG.Project.Planning.moveIssue,
                 sort: TBG.Project.Planning.calculateNewBacklogMilestoneDetails,
-                tolerance: 'pointer'
+                tolerance: 'pointer',
+                helper: function(event, ui){
+                    var $clone =  $(ui).clone();
+                    $clone .css('position','absolute');
+                    return $clone.get(0);
+                }
             });
         };
 
@@ -2512,13 +2578,22 @@ define(['prototype', 'effects', 'controls', 'scriptaculous', 'jquery', 'TweenMax
             });
         }
 
-        TBG.Project.Planning.Whiteboard.calculateSwimlaneCounts = function() {
+        TBG.Project.Planning.Whiteboard.calculateSwimlaneCounts = function(new_issue_retrieved) {
+            var new_issue_retrieved = new_issue_retrieved || false;
+
             $$('#whiteboard .tbody').each(function (swimlane) {
                 swimlane_rows = swimlane.select('.tr');
 
                 if (swimlane_rows.size() != 2) return;
 
                 swimlane_rows[0].down('.swimlane_count').update(swimlane_rows[1].select('.whiteboard-issue').size());
+
+                if (swimlane_rows[1].select('.whiteboard-issue').size() == 0) {
+                    swimlane.addClassName('collapsed');
+                }
+                else if (new_issue_retrieved && swimlane_rows[1].select('.whiteboard-issue').size() > 0) {
+                    swimlane.removeClassName('collapsed');
+                }
             });
         }
 
@@ -2566,8 +2641,9 @@ define(['prototype', 'effects', 'controls', 'scriptaculous', 'jquery', 'TweenMax
         TBG.Project.Planning.Whiteboard.retrieveMilestoneStatus = function(event, item) {
             var mi = $('selected_milestone_input');
             var milestone_id = (event) ? $(item).dataset.inputValue : mi.dataset.selectedValue;
+            var board_id = (event) ? $(item).dataset.boardValue : mi.dataset.selectedBoardValue;
             TBG.Main.Helpers.ajax(mi.dataset.statusUrl, {
-                additional_params: '&milestone_id=' + parseInt(milestone_id),
+                additional_params: '&milestone_id=' + parseInt(milestone_id) + '&board_id=' + parseInt(board_id),
                 url_method: 'get',
                 loading: {
                     hide: 'selected_milestone_status_details',
@@ -2637,7 +2713,7 @@ define(['prototype', 'effects', 'controls', 'scriptaculous', 'jquery', 'TweenMax
 
             if (transition_id) parameters += '&transition_id=' + transition_id;
 
-            TBG.Main.Helpers.ajax(wb.data('whiteboard-url'), {
+            TBG.Main.Helpers.ajax($('whiteboard').dataset.whiteboardUrl, {
                 additional_params: parameters,
                 url_method: 'post',
                 loading: {
@@ -2650,7 +2726,10 @@ define(['prototype', 'effects', 'controls', 'scriptaculous', 'jquery', 'TweenMax
                         if (json.transition_id && json.component) {
                             document.stopObserving('keydown', TBG.Core._escapeWatcher);
                             document.observe('keydown', customEscapeWatcher);
-                            $('moving_issue_workflow_transition').update(json.component);
+                            $('fullpage_backdrop').appear({duration: 0.2});
+                            $('fullpage_backdrop_content').update(json.component);
+                            $('fullpage_backdrop_content').appear({duration: 0.2});
+                            $('fullpage_backdrop_indicator').fade({duration: 0.2});
                             TBG.Issues.showWorkflowTransition(json.transition_id);
                             $('transition_working_' + json.transition_id + '_cancel').observe('click', function (event) {
                                 Event.stop(event);
@@ -2726,50 +2805,52 @@ define(['prototype', 'effects', 'controls', 'scriptaculous', 'jquery', 'TweenMax
         };
 
         TBG.Project.Planning.Whiteboard.initializeDragDrop = function () {
-            var overlapThreshold = '50%';
-            var droppablesSelector = '.gs-droppable';
-            GSDraggable.create(jQuery('.whiteboard-issue'), {
-                type: 'x',
-                bounds: jQuery('#whiteboard'),
-                onPress: function() {
-                    this.startX = this.x;
-                    this.startY = this.y;
-                },
-                onDragStart: function(ev) {
-                    jQuery(this.target).addClass('gs-draggable');
-                    TBG.Project.Planning.Whiteboard.detectAvailableDropColumns(ev, this.target);
-                },
-                onDrag: function(ev) {
-                    var droppables = jQuery(droppablesSelector);
-                    var i = droppables.length;
-                    while (--i > -1) {
-                        if (this.hitTest(droppables[i], overlapThreshold)) {
-                            jQuery(droppables[i]).addClass('drop-hover');
-                        } else {
-                            jQuery(droppables[i]).removeClass('drop-hover');
+            if (jQuery('.whiteboard-issue').length > 0) {
+                var overlapThreshold = '50%';
+                var droppablesSelector = '.gs-droppable';
+                GSDraggable.create(jQuery('.whiteboard-issue'), {
+                    type: 'x',
+                    bounds: jQuery('#whiteboard'),
+                    onPress: function() {
+                        this.startX = this.x;
+                        this.startY = this.y;
+                    },
+                    onDragStart: function(ev) {
+                        jQuery(this.target).addClass('gs-draggable');
+                        TBG.Project.Planning.Whiteboard.detectAvailableDropColumns(ev, this.target);
+                    },
+                    onDrag: function(ev) {
+                        var droppables = jQuery(droppablesSelector);
+                        var i = droppables.length;
+                        while (--i > -1) {
+                            if (this.hitTest(droppables[i], overlapThreshold)) {
+                                jQuery(droppables[i]).addClass('drop-hover');
+                            } else {
+                                jQuery(droppables[i]).removeClass('drop-hover');
+                            }
                         }
-                    }
-                },
-                onDragEnd:function(ev) {
-                    jQuery(this.target).removeClass('gs-draggable');
-                    var droppables = jQuery(droppablesSelector);
-                    var i = droppables.length;
-                    var column_found = false;
-                    while (--i > -1) {
-                        if (this.hitTest(droppables[i], overlapThreshold)) {
-                            TBG.Project.Planning.Whiteboard.updateIssueColumn(ev, jQuery(this.target), jQuery(droppables[i]), {x: this.startX, y: this.startY});
-                            column_found = true;
+                    },
+                    onDragEnd:function(ev) {
+                        jQuery(this.target).removeClass('gs-draggable');
+                        var droppables = jQuery(droppablesSelector);
+                        var i = droppables.length;
+                        var column_found = false;
+                        while (--i > -1) {
+                            if (this.hitTest(droppables[i], overlapThreshold)) {
+                                TBG.Project.Planning.Whiteboard.updateIssueColumn(ev, jQuery(this.target), jQuery(droppables[i]), {x: this.startX, y: this.startY});
+                                column_found = true;
+                            }
                         }
-                    }
-                    if (! column_found) TweenMax.to(this.target, .3, {x: this.startX, y: this.startY});
-                    TBG.Project.Planning.Whiteboard.resetAvailableDropColumns(ev);
-                },
-                zIndexBoost: false
-            });
-            var highZIndex = 1010;
-            jQuery('#whiteboard').find('.whiteboard-issue').each(function () {
-                jQuery(this).css('z-index', highZIndex--);
-            });
+                        if (! column_found) TweenMax.to(this.target, .3, {x: this.startX, y: this.startY});
+                        TBG.Project.Planning.Whiteboard.resetAvailableDropColumns(ev);
+                    },
+                    zIndexBoost: false
+                });
+                var highZIndex = 1010;
+                jQuery('#whiteboard .whiteboard-issue').each(function () {
+                    jQuery(this).css('z-index', highZIndex--);
+                });
+            }
 
             if (!TBG.Core.Pollers.planningpoller)
                 TBG.Core.Pollers.planningpoller = new PeriodicalExecuter(TBG.Core.Pollers.Callbacks.whiteboardPlanningPoller, 6);
@@ -2818,7 +2899,7 @@ define(['prototype', 'effects', 'controls', 'scriptaculous', 'jquery', 'TweenMax
                                     }
                                     TBG.Project.Planning.Whiteboard.initializeDragDrop();
                                     TBG.Project.Planning.Whiteboard.calculateColumnCounts();
-                                    TBG.Project.Planning.Whiteboard.calculateSwimlaneCounts();
+                                    TBG.Project.Planning.Whiteboard.calculateSwimlaneCounts(true);
                                     TBG.Project.Planning.Whiteboard.retrieveMilestoneStatus();
                                 }
                             }
@@ -2892,6 +2973,7 @@ define(['prototype', 'effects', 'controls', 'scriptaculous', 'jquery', 'TweenMax
                             }
 
                             pc.dataset.lastRefreshed = get_current_timestamp();
+                            wb.dataset.whiteboardUrl = json.whiteboard_url;
                             TBG.Core.Pollers.Locks.planningpoller = false;
                         }
                     },
@@ -3080,7 +3162,6 @@ define(['prototype', 'effects', 'controls', 'scriptaculous', 'jquery', 'TweenMax
                 milestone_list.insert({bottom: content});
             } else {
                 milestone_list.insert({top: content});
-                setTimeout(TBG.Project.Planning.sortMilestoneIssues({target: 'milestone_' + milestone_id + '_issues'}), 250);
             }
             if (recalculate == 'all') {
                 TBG.Project.Planning.calculateAllMilestonesVisibilityDetails();
@@ -3088,6 +3169,9 @@ define(['prototype', 'effects', 'controls', 'scriptaculous', 'jquery', 'TweenMax
                 TBG.Project.Planning.calculateMilestoneIssueVisibilityDetails(milestone_list);
             }
             TBG.Project.Planning.calculateNewBacklogMilestoneDetails();
+            if (milestone_id != 0) {
+                setTimeout(TBG.Project.Planning.sortMilestoneIssues({target: 'milestone_' + milestone_id + '_issues'}), 250);
+            }
         };
 
         TBG.Project.Planning.retrieveIssue = function (issue_id, url, existing_element) {
@@ -3127,6 +3211,9 @@ define(['prototype', 'effects', 'controls', 'scriptaculous', 'jquery', 'TweenMax
                                     TBG.Project.Planning.insertIntoMilestone(json_milestone_id, json.component, 'all');
                                 }
                             }
+                        }
+                        if (json.issue_details.milestone && json.issue_details.milestone.id && json.milestone_percent_complete != null) {
+                            $('milestone_' + json.issue_details.milestone.id + '_percentage_filler').setStyle({width: json.milestone_percent_complete + '%'});
                         }
                     }
                 }
@@ -3189,25 +3276,31 @@ define(['prototype', 'effects', 'controls', 'scriptaculous', 'jquery', 'TweenMax
             var list_issues = jQuery(list).find('.issue_container').not('.child_issue');
             var closed_issues = jQuery(list).find('.issue_container.issue_closed').not('.child_issue');
             var visible_issues = list_issues.filter(':visible');
-            var sum_points = 0;
-            var sum_hours = 0;
+            var sum_estimated_points = 0;
+            var sum_estimated_hours = 0;
+            var sum_estimated_minutes = 0;
+            var sum_spent_points = 0;
+            var sum_spent_hours = 0;
+            var sum_spent_minutes = 0;
             visible_issues.each(function (index) {
                 var elm = $(this);
                 if (!elm.hasClassName('child_issue')) {
                     if (elm.dataset.estimatedPoints !== undefined)
-                        sum_points += parseInt(elm.dataset.estimatedPoints);
+                        sum_estimated_points += parseInt(elm.dataset.estimatedPoints);
                     if (elm.dataset.estimatedHours !== undefined)
-                        sum_hours += parseInt(elm.dataset.estimatedHours);
+                        sum_estimated_hours += parseInt(elm.dataset.estimatedHours);
+                    if (elm.dataset.estimatedMinutes !== undefined)
+                        sum_estimated_minutes += parseInt(elm.dataset.estimatedMinutes);
+                    if (elm.dataset.spentPoints !== undefined)
+                        sum_spent_points += parseInt(elm.dataset.spentPoints);
+                    if (elm.dataset.spentHours !== undefined)
+                        sum_spent_hours += parseInt(elm.dataset.spentHours);
+                    if (elm.dataset.spentMinutes !== undefined)
+                        sum_spent_minutes += parseInt(elm.dataset.spentMinutes);
                 }
             });
             var num_visible_issues = visible_issues.size();
             var milestone_id = $(list).up('.milestone_box').dataset.milestoneId;
-
-            if (milestone_id != 0) {
-                var multiplier = 100 / list_issues.size();
-                var pct = Math.floor(closed_issues.size() * multiplier);
-                $('milestone_' + milestone_id + '_percentage_filler').setStyle({width: pct + '%'});
-            }
 
             if (num_visible_issues === 0 && !$(list).hasClassName('collapsed')) {
                 if (list_issues.size() > 0) {
@@ -3228,8 +3321,18 @@ define(['prototype', 'effects', 'controls', 'scriptaculous', 'jquery', 'TweenMax
             } else {
                 $('milestone_' + milestone_id + '_issues_count').update(num_visible_issues);
             }
-            $('milestone_' + milestone_id + '_points_count').update(sum_points);
-            $('milestone_' + milestone_id + '_hours_count').update(sum_hours);
+            sum_spent_hours += Math.floor(sum_spent_minutes / 60);
+            sum_estimated_hours += Math.floor(sum_estimated_minutes / 60);
+            sum_spent_minutes = sum_spent_minutes % 60;
+            sum_estimated_minutes = sum_estimated_minutes % 60;
+            $('milestone_' + milestone_id + '_points_count').update(sum_spent_points + ' / ' + sum_estimated_points);
+            if (sum_spent_minutes != 0) {
+                sum_spent_hours += ':' + ((sum_spent_minutes.toString().length == 1) ? '0' : '') + sum_spent_minutes;
+            }
+            if (sum_estimated_minutes != 0) {
+                sum_estimated_hours += ':' + ((sum_estimated_minutes.toString().length == 1) ? '0' : '') + sum_estimated_minutes;
+            }
+            $('milestone_' + milestone_id + '_hours_count').update(sum_spent_hours + ' / ' + sum_estimated_hours);
         };
 
         TBG.Project.Planning.calculateAllMilestonesVisibilityDetails = function () {
@@ -3247,6 +3350,7 @@ define(['prototype', 'effects', 'controls', 'scriptaculous', 'jquery', 'TweenMax
                 var num_issues = 0;
                 var sum_points = 0;
                 var sum_hours = 0;
+                var sum_minutes = 0;
                 var include_closed = $('milestone_list').hasClassName('show_closed');
                 jQuery('.milestone_issue').removeClass('included');
                 nbmm.up('.milestone_issues').childElements().each(function (elm) {
@@ -3260,14 +3364,21 @@ define(['prototype', 'effects', 'controls', 'scriptaculous', 'jquery', 'TweenMax
                                     sum_points += parseInt(elm.down('.issue_container').dataset.estimatedPoints);
                                 if (elm.down('.issue_container').dataset.estimatedHours !== undefined)
                                     sum_hours += parseInt(elm.down('.issue_container').dataset.estimatedHours);
+                                if (elm.down('.issue_container').dataset.estimatedMinutes !== undefined)
+                                    sum_minutes += parseInt(elm.down('.issue_container').dataset.estimatedMinutes);
                             }
                         }
                     } else {
                         throw $break;
                     }
                 });
+                sum_hours += Math.floor(sum_minutes / 60);
+                sum_minutes = sum_minutes % 60;
                 $('new_backlog_milestone_issues_count').update(num_issues);
                 $('new_backlog_milestone_points_count').update(sum_points);
+                if (sum_minutes != 0) {
+                    sum_hours += ':' + ((sum_minutes.toString().length == 1) ? '0' : '') + sum_minutes;
+                }
                 $('new_backlog_milestone_hours_count').update(sum_hours);
             }
         };
@@ -3507,9 +3618,18 @@ define(['prototype', 'effects', 'controls', 'scriptaculous', 'jquery', 'TweenMax
                                 TBG.Project.Planning.initializeDragDropSorting();
                             }
                         }
+                        TBG.Project.Milestone.selectFromHash();
                     }
                 }
             });
+        }
+
+        TBG.Project.Milestone.selectFromHash = function () {
+            var hash = window.location.hash;
+
+            if (hash != undefined && hash.indexOf('roadmap_milestone_') == 1) {
+                jQuery(hash + '_details_link').eq(0).find('> a:first-child').trigger('click');
+            }
         }
 
         TBG.Project.Milestone.remove = function (url, milestone_id) {
@@ -3606,7 +3726,7 @@ define(['prototype', 'effects', 'controls', 'scriptaculous', 'jquery', 'TweenMax
                     }
                 }
             });
-        }
+        };
 
         TBG.Project.Build.add = function (url, edition_id) {
             TBG.Main.Helpers.ajax(url, {
@@ -3618,19 +3738,19 @@ define(['prototype', 'effects', 'controls', 'scriptaculous', 'jquery', 'TweenMax
                     update: {element: 'builds_' + edition_id, insertion: true, from: 'html'}
                 }
             });
-        }
+        };
 
         TBG.Project.saveOther = function (url) {
             TBG.Main.Helpers.ajax(url, {
                 form: 'project_other',
                 loading: {indicator: 'settings_save_indicator'}
             });
-        }
+        };
 
         TBG.Project.Edition.edit = function (url, edition_id)
         {
             TBG.Main.Helpers.Backdrop.show(url);
-        }
+        };
 
         TBG.Project.Edition.remove = function (url, eid) {
             TBG.Main.Helpers.ajax(url, {
@@ -3647,7 +3767,7 @@ define(['prototype', 'effects', 'controls', 'scriptaculous', 'jquery', 'TweenMax
                     hide: 'del_edition_' + eid
                 }
             });
-        }
+        };
 
         TBG.Project.Edition.add = function (url) {
             TBG.Main.Helpers.ajax(url, {
@@ -3659,7 +3779,7 @@ define(['prototype', 'effects', 'controls', 'scriptaculous', 'jquery', 'TweenMax
                     update: {element: 'edition_table', insertion: true, from: 'html'}
                 }
             });
-        }
+        };
 
         TBG.Project.Edition.submitSettings = function (url, edition_id) {
             TBG.Main.Helpers.ajax(url, {
@@ -3669,7 +3789,7 @@ define(['prototype', 'effects', 'controls', 'scriptaculous', 'jquery', 'TweenMax
                     update: {element: 'edition_' + edition_id + '_name', from: 'edition_name'}
                 }
             });
-        }
+        };
 
         TBG.Project.Edition.Component.add = function (url, cid) {
             TBG.Main.Helpers.ajax(url, {
@@ -3959,11 +4079,18 @@ define(['prototype', 'effects', 'controls', 'scriptaculous', 'jquery', 'TweenMax
             ['upcoming', 'past'].each(function (cn) {
                 prp.removeClassName(cn);
             });
+
+            var hash = window.location.hash;
+
+            if (hash != undefined && hash.indexOf('roadmap_milestone_') == 1) {
+                window.location.hash = '';
+            }
         };
 
         TBG.Project.showRoadmap = function () {
             $('milestone_details_overview').hide();
             $('project_roadmap').show();
+            jQuery('#planning_board_settings_gear').show();
         }
 
         TBG.Project.showMilestoneDetails = function (url, milestone_id, force) {
@@ -3974,6 +4101,8 @@ define(['prototype', 'effects', 'controls', 'scriptaculous', 'jquery', 'TweenMax
             if (force && $('milestone_details_' + milestone_id)) {
                 $('milestone_details_' + milestone_id).remove();
             }
+
+            jQuery('#project_planning_action_strip .more_actions_dropdown, #planning_board_settings_gear').hide();
 
             if (!$('milestone_details_' + milestone_id)) {
                 window.location.hash = 'roadmap_milestone_' + milestone_id;
@@ -4942,7 +5071,7 @@ define(['prototype', 'effects', 'controls', 'scriptaculous', 'jquery', 'TweenMax
                                             if (json.fields[fieldname].values) {
                                                 $(fieldname + '_id_additional').update('');
                                                 for (var opt in json.fields[fieldname].values) {
-                                                    $(fieldname + '_id_additional').insert('<option value="' + opt + '">' + json.fields[fieldname].values[opt] + '</option>');
+                                                    $(fieldname + '_id_additional').insert('<option value="' + opt.substr(1) + '">' + json.fields[fieldname].values[opt] + '</option>');
                                                 }
                                                 $(fieldname + '_id_additional').setValue(prev_val);
                                             }
@@ -4969,7 +5098,8 @@ define(['prototype', 'effects', 'controls', 'scriptaculous', 'jquery', 'TweenMax
                                                 if ($(fieldname + '_id')) {
                                                     $(fieldname + '_id').update('');
                                                     for (var opt in json.fields[fieldname].values) {
-                                                        $(fieldname + '_id').insert('<option value="' + opt + '">' + json.fields[fieldname].values[opt] + '</option>');
+                                                      console.log('opt2', typeof(opt))
+                                                        $(fieldname + '_id').insert('<option value="' + opt.substr(1) + '">' + json.fields[fieldname].values[opt] + '</option>');
                                                     }
                                                     $(fieldname + '_id').setValue(prev_val);
                                                 }
@@ -5031,6 +5161,8 @@ define(['prototype', 'effects', 'controls', 'scriptaculous', 'jquery', 'TweenMax
                 $('report_form').hide();
                 $('report_more_here').show('block');
                 $('issuetype_list').show('block');
+                $('reportissue_container').addClassName('large');
+                $('reportissue_container').removeClassName('huge');
             }
 
         }
@@ -5108,7 +5240,7 @@ define(['prototype', 'effects', 'controls', 'scriptaculous', 'jquery', 'TweenMax
         TBG.Issues.findRelated = function (url) {
             TBG.Main.Helpers.ajax(url, {
                 form: 'viewissue_find_issue_form',
-                loading: {indicator: 'find_issue_indicator'},
+                loading: {indicator: 'viewissue_find_issue_indicator'},
                 success: {update: 'viewissue_relation_results'}
             });
             return false;
@@ -5117,7 +5249,7 @@ define(['prototype', 'effects', 'controls', 'scriptaculous', 'jquery', 'TweenMax
         TBG.Issues.findDuplicate = function (url, transition_id) {
             TBG.Main.Helpers.ajax(url, {
                 additional_params: 'searchfor=' + $('viewissue_find_issue_' + transition_id + '_input').getValue(),
-                loading: {indicator: 'find_issue_' + transition_id + '_indicator'},
+                loading: {indicator: 'viewissue_find_issue_' + transition_id + '_indicator'},
                 success: {update: 'viewissue_' + transition_id + '_duplicate_results'}
             });
         };
@@ -5189,7 +5321,15 @@ define(['prototype', 'effects', 'controls', 'scriptaculous', 'jquery', 'TweenMax
                 additional_params_query += '/milestone_id/' + btn.dataset.milestoneId;
             }
 
-            TBG.Main.Helpers.Backdrop.show(url +  additional_params_query);
+            if (url.indexOf('issuetype') !== -1) {
+                TBG.Main.Helpers.Backdrop.show(url +  additional_params_query, function () {
+                    jQuery('#reportissue_container').addClass('huge');
+                    jQuery('#reportissue_container').removeClass('large');
+                });
+            }
+            else {
+                TBG.Main.Helpers.Backdrop.show(url +  additional_params_query);
+            }
         };
 
         TBG.Issues.relate = function (url) {
@@ -5471,7 +5611,7 @@ define(['prototype', 'effects', 'controls', 'scriptaculous', 'jquery', 'TweenMax
                     $(fn).show();
                 }
             }
-            ['points', 'hours', 'days', 'weeks', 'months'].each(function (unit) {
+            ['points', 'minutes', 'hours', 'days', 'weeks', 'months'].each(function (unit) {
                 if (field != 'spent_time' && $(field + '_' + issue_id + '_' + unit + '_input'))
                     $(field + '_' + issue_id + '_' + unit + '_input').setValue(values[unit]);
 
@@ -5597,7 +5737,7 @@ define(['prototype', 'effects', 'controls', 'scriptaculous', 'jquery', 'TweenMax
                         TBG.Issues.Field.Updaters.timeFromObject(json.issue_id, json.field, json.values, field);
                         (json.changed == true) ? TBG.Issues.markAsChanged(field) : TBG.Issues.markAsUnchanged(field);
                         if ($('issue_' + issue_id)) {
-                            ['points', 'hours'].each(function (unit) {
+                            ['points', 'hours', 'minutes'].each(function (unit) {
                                 if (field == 'estimated_time') {
                                     TBG.Issues.Field.updateEstimatedPercentbar(json);
                                     $('issue_' + issue_id).setAttribute('data-estimated-' + unit, json.values[unit]);
@@ -5689,6 +5829,30 @@ define(['prototype', 'effects', 'controls', 'scriptaculous', 'jquery', 'TweenMax
             });
         }
 
+        TBG.Issues.Field.incrementTimeMinutes = function (minutes, input)
+        {
+            if (minutes > 60 || minutes < 0) return;
+
+            var hour_input = input.replace('minutes', 'hours');
+
+            // Increment hour by one for 60 minutes
+            if (minutes == 60 && $(hour_input)) {
+              $(hour_input).setValue((parseInt($(hour_input).getValue()) || 0) + 1);
+              return;
+            }
+
+            if (! $(input)) return;
+
+            var new_minutes = (parseInt($(input).getValue()) || 0) + minutes;
+
+            if (new_minutes >= 60 && $(hour_input)) {
+                $(hour_input).setValue((parseInt($(hour_input).getValue()) || 0) + 1);
+                new_minutes = new_minutes - 60;
+            }
+
+            $(input).setValue(new_minutes);
+        }
+
         TBG.Issues.markAsChanged = function (field)
         {
             if ($('viewissue_changed') != undefined) {
@@ -5698,6 +5862,10 @@ define(['prototype', 'effects', 'controls', 'scriptaculous', 'jquery', 'TweenMax
                 }
 
                 $(field + '_field').addClassName('issue_detail_changed');
+                if (field == 'issuetype') {
+                    jQuery("#workflow_actions input[type='submit'], #workflow_actions input[type='button']").prop("disabled", true);
+                    jQuery("#workflow_actions a").off('click');
+                }
             }
 
             if ($('comment_save_changes'))
@@ -5716,18 +5884,46 @@ define(['prototype', 'effects', 'controls', 'scriptaculous', 'jquery', 'TweenMax
                     if ($('comment_save_changes'))
                         $('comment_save_changes').checked = false;
                 }
+                if (field == 'issuetype') {
+                    jQuery("#workflow_actions input[type='submit'], #workflow_actions input[type='button']").prop("disabled", false);
+                    jQuery("#workflow_actions a").on('click');
+                }
             }
         }
 
-        TBG.Issues.ACL.toggle_checkboxes = function (element, issue_id) {
-            var val = element.getValue();
-            var opp_val = (val == 'restricted') ? 'public' : 'restricted';
-            if ($(element).checked) {
-                $('acl_' + issue_id + '_' + val).show();
-                $('acl_' + issue_id + '_' + opp_val).hide();
-            } else {
-                $('acl_' + issue_id + '_' + val).hide();
-                $('acl_' + issue_id + '_' + opp_val).show();
+        TBG.Issues.ACL.toggle_checkboxes = function (element, issue_id, val) {
+            if (! jQuery(element).is(':checked')) return;
+
+            switch (val) {
+                case 'public':
+                    $('acl_' + issue_id + '_public').show();
+                    $('acl_' + issue_id + '_restricted').hide();
+                    $('issue_' + issue_id + '_public_category_access_list').hide();
+                    $('issue_access_public_category_input').disable();
+                    $('acl-users-teams-selector').hide();
+                    break;
+                case 'public_category':
+                    $('acl_' + issue_id + '_public').show();
+                    $('acl_' + issue_id + '_restricted').hide();
+                    $('issue_' + issue_id + '_public_category_access_list').show();
+                    $('issue_access_public_category_input').enable();
+                    $('acl-users-teams-selector').show();
+                    break;
+                case 'restricted':
+                    $('acl_' + issue_id + '_public').hide();
+                    $('acl_' + issue_id + '_restricted').show();
+                    $('acl-users-teams-selector').show();
+                    break;
+            }
+        };
+
+        TBG.Issues.ACL.toggle_custom_access = function (element) {
+            if (jQuery(element).is(':checked')) {
+                jQuery('.report-issue-custom-access-container').show();
+                jQuery('.report-issue-custom-access-container input[name=issue_access]').trigger('change');
+            }
+            else {
+                jQuery('.report-issue-custom-access-container').hide();
             }
         };
 
@@ -5737,8 +5933,14 @@ define(['prototype', 'effects', 'controls', 'scriptaculous', 'jquery', 'TweenMax
                     indicator: 'popup_find_acl_' + issue_id + '_spinning'
                 },
                 success: {
-                    update: {element: 'issue_' + issue_id + '_access_list', insertion: true},
-                    hide: ['popup_find_acl_' + issue_id, 'issue_' + issue_id + '_access_list_none']
+                    update: {},
+                    callback: function(json) {
+                        $('issue_' + issue_id + '_restricted_access_list').insert({bottom: json.content});
+                        $('issue_' + issue_id + '_public_category_access_list').insert({bottom: json.content});
+                        $('issue_' + issue_id + '_restricted_access_list_none').hide();
+                        $('issue_' + issue_id + '_public_category_access_list_none').hide();
+                    },
+                    hide: 'popup_find_acl_' + issue_id
                 }
             });
         };
@@ -6011,7 +6213,7 @@ define(['prototype', 'effects', 'controls', 'scriptaculous', 'jquery', 'TweenMax
 
         TBG.Search.bulkContainerChanger = function (mode) {
             var sub_container_id = 'bulk_action_subcontainer_' + $('bulk_action_selector_' + mode).getValue();
-            $('search_results').select('.bulk_action_subcontainer').each(function (element) {
+            $$('.bulk_action_subcontainer').each(function (element) {
                 element.hide();
             });
             if ($(sub_container_id + '_top')) {
@@ -6125,6 +6327,7 @@ define(['prototype', 'effects', 'controls', 'scriptaculous', 'jquery', 'TweenMax
                     callback: function () {
                         $$('.workflow_transition_submit_button').each(function (element) {
                             $(element).addClassName('disabled');
+                            $(element).writeAttribute('disabled');
                         });
                     }
                 },
@@ -6139,9 +6342,19 @@ define(['prototype', 'effects', 'controls', 'scriptaculous', 'jquery', 'TweenMax
                     callback: function () {
                         $$('.workflow_transition_submit_button').each(function (element) {
                             $(element).removeClassName('disabled');
+                            $(element).writeAttribute('disabled', false);
                         });
                     }
                 }
+            });
+        }
+
+        TBG.Search.nonInteractiveWorkflowTransition = function () {
+            // No need to remove 'disabled' class and attribute since form that is submitted
+            // will refresh page.
+            $$('.workflow_transition_submit_button').each(function (element) {
+                $(element).addClassName('disabled');
+                $(element).writeAttribute('disabled');
             });
         }
 
@@ -6153,6 +6366,7 @@ define(['prototype', 'effects', 'controls', 'scriptaculous', 'jquery', 'TweenMax
                     callback: function () {
                         $$('.workflow_transition_submit_button').each(function (element) {
                             $(element).addClassName('disabled');
+                            $(element).writeAttribute('disabled');
                         });
                     }
                 },
@@ -6166,6 +6380,7 @@ define(['prototype', 'effects', 'controls', 'scriptaculous', 'jquery', 'TweenMax
                     callback: function () {
                         $$('.workflow_transition_submit_button').each(function (element) {
                             $(element).removeClassName('disabled');
+                            $(element).writeAttribute('disabled', false);
                         });
                     }
                 }
@@ -6451,9 +6666,9 @@ define(['prototype', 'effects', 'controls', 'scriptaculous', 'jquery', 'TweenMax
                 TBG.Search.liveUpdate();
         };
 
-        TBG.Search.saveColumnVisibility = function () {
+        TBG.Search.saveColumnVisibility = function (force) {
             var fif = $('find_issues_form');
-            if (fif.dataset.isSaved === undefined) {
+            if (fif.dataset.isSaved === undefined || force === true) {
                 var scc = $('search_columns_container');
                 var parameters = fif.serialize();
                 TBG.Main.Helpers.ajax(scc.dataset.url, {
@@ -6473,7 +6688,7 @@ define(['prototype', 'effects', 'controls', 'scriptaculous', 'jquery', 'TweenMax
                 TBG.Search.setFilterValue(element, true);
             }
             TBG.Search.toggleColumn(element.dataset.value);
-            TBG.Search.saveColumnVisibility();
+            TBG.Search.saveColumnVisibility(true);
         };
 
         TBG.Search.initializeFilters = function () {
@@ -6642,6 +6857,9 @@ define(['prototype', 'effects', 'controls', 'scriptaculous', 'jquery', 'TweenMax
 
         TBG.Search.loadDynamicChoices = function () {
             var fif = $('find_issues_form');
+            if (!fif) {
+                return;
+            }
             var url = fif.dataset.dynamicCallbackUrl;
             var parameters = '&project_id=' + $('filter_project_id_value_input').getValue();
             var filters_containers = [];
@@ -6727,6 +6945,9 @@ define(['prototype', 'effects', 'controls', 'scriptaculous', 'jquery', 'TweenMax
 
         TBG.Search.liveUpdate = function (force) {
             var fif = $('find_issues_form');
+            if (!fif) {
+                return;
+            }
             var url = fif.action;
             var parameters = fif.serialize();
 
@@ -7059,7 +7280,7 @@ define(['prototype', 'effects', 'controls', 'scriptaculous', 'jquery', 'TweenMax
             getBoxHTML: function (box_id, provider, box_size, index) {
                 var image_ext = box_size == 'small' ? '.ico.png' : '.png';
                 return '<a title="' + this.image_title.replace('%openid_provider_name', provider["name"]) + '" href="javascript:TBG.OpenID.signin(\'' + box_id + '\');"'
-                    + 'class="' + box_id + ' openid_' + box_size + '_btn button button-silver"><img src="' + TBG.basepath + 'iconsets/oxygen/openid_providers.' + box_size + '/' + box_id + image_ext + '"></a>';
+                    + 'class="' + box_id + ' openid_' + box_size + '_btn button button-silver"><img src="' + TBG.basepath + 'images/openid_providers.' + box_size + '/' + box_id + image_ext + '"></a>';
             },
             /**
              * Provider image click
@@ -7155,7 +7376,7 @@ define(['prototype', 'effects', 'controls', 'scriptaculous', 'jquery', 'TweenMax
                 if (provider['name'] == 'OpenID') {
                     id = this.input_id;
                     value = 'http://';
-                    style = 'background: #FFF url(' + TBG.basepath + 'iconsets/oxygen/openid-inputicon.gif) no-repeat scroll 0 50%; padding-left:18px;';
+                    style = 'background: #FFF url(' + TBG.basepath + 'images/openid-inputicon.gif) no-repeat scroll 0 50%; padding-left:18px;';
                 }
                 html = '<input id="' + id + '" type="text" style="' + style + '" name="' + id + '" value="' + value + '" />';
                 if (label) {
@@ -7393,7 +7614,7 @@ define(['prototype', 'effects', 'controls', 'scriptaculous', 'jquery', 'TweenMax
                 }
             });
         };
-        
+
         TBG.Main.Notifications.loadMore = function (event, loadToTop) {
             var loadToTop = loadToTop || false;
             if (TBG.Main.Notifications.loadingLocked !== true || loadToTop) {
@@ -7445,6 +7666,27 @@ define(['prototype', 'effects', 'controls', 'scriptaculous', 'jquery', 'TweenMax
                     }
                 }
             }
+        }
+
+        TBG.Main.Notifications.Web.GrantPermissionOrSendTest = function (title, body, icon) {
+            if (!Notify.needsPermission) {
+                TBG.Main.Notifications.Web.Send(title, body, 'test', icon);
+            } else if (Notify.isSupported()) {
+                Notify.requestPermission();
+            }
+        }
+
+        TBG.Main.Notifications.Web.Send = function (title, body, tag, icon, click_callback) {
+            if (Notify.needsPermission) return;
+
+            new Notify(title, {
+                body: body,
+                tag: tag,
+                icon: icon,
+                timeout: 8,
+                closeOnClick: true,
+                notifyClick: click_callback
+            }).show();
         }
 
         TBG.Main.initializeMentionable = function (textarea) {
@@ -7789,6 +8031,31 @@ define(['prototype', 'effects', 'controls', 'scriptaculous', 'jquery', 'TweenMax
 
         TBG.Themes.install = function (event) {
             TBG.Core.installPlugin(this, 'theme');
+        };
+
+        TBG.Core._mobileMenuMover = function() {
+            if (document.viewport.getWidth() > 900) {
+                if ($('mobile_menu').childElements().size() > 1) {
+                    var um = $('user_menu');
+                    $('header_userinfo').insert({
+                        before: $('main_menu').remove(),
+                    });
+                }
+                if ($('header_avatar')) {
+                    $('header_avatar').stopObserving('click');
+                }
+            } else {
+                if ($('header_avatar')) {
+                    $('header_avatar').observe('click', function(e) { $('body').toggleClassName('mobile_rightmenu_visible');e.preventDefault(); });
+                }
+                if ($('mobile_menu').childElements().size() == 1) {
+                    var um = $('user_menu');
+                    if (um) {
+                        $('mobile_menu').insert(um.remove());
+                    }
+                    $('mobile_menu').insert($('main_menu').remove());
+                }
+            }
         };
 
         return TBG;

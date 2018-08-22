@@ -156,7 +156,7 @@
             $settings[\thebuggenie\core\framework\Settings::SETTING_UPLOAD_ALLOW_IMAGE_CACHING] = 0;
             $settings[\thebuggenie\core\framework\Settings::SETTING_UPLOAD_DELIVERY_USE_XSEND] = 0;
             $settings[\thebuggenie\core\framework\Settings::SETTING_TBG_NAME] = 'The Bug Genie';
-            $settings[\thebuggenie\core\framework\Settings::SETTING_SYNTAX_HIGHLIGHT_DEFAULT_LANGUAGE] = 'html4strict';
+            $settings[\thebuggenie\core\framework\Settings::SETTING_SYNTAX_HIGHLIGHT_DEFAULT_LANGUAGE] = 'html';
             $settings[\thebuggenie\core\framework\Settings::SETTING_SYNTAX_HIGHLIGHT_DEFAULT_NUMBERING] = '3';
             $settings[\thebuggenie\core\framework\Settings::SETTING_SYNTAX_HIGHLIGHT_DEFAULT_INTERVAL] = '10';
             $settings[\thebuggenie\core\framework\Settings::SETTING_ICONSET] = 'oxygen';
@@ -171,6 +171,27 @@
             {
                 $this->saveSetting($settings_name, 'core', $settings_val, 0, $scope_id);
             }
+        }
+
+        public function getFileIds()
+        {
+            $crit = $this->getCriteria();
+            $file_id_settings = [
+                framework\Settings::SETTING_FAVICON_ID,
+                framework\Settings::SETTING_HEADER_ICON_ID
+            ];
+            $crit->addWhere(self::NAME, $file_id_settings, Criteria::DB_IN);
+            $crit->addSelectionColumn(self::VALUE, 'file_id');
+
+            $res = $this->doSelect($crit);
+            $file_ids = [];
+            if ($res) {
+                while ($row = $res->getNextRow()) {
+                    $file_ids[$row['file_id']] = $row['file_id'];
+                }
+            }
+
+            return $file_ids;
         }
 
     }

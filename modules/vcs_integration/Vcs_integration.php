@@ -98,12 +98,15 @@
             framework\Event::listen('core', 'project_sidebar_links', array($this, 'listen_project_links'));
             framework\Event::listen('core', 'breadcrumb_project_links', array($this, 'listen_breadcrumb_links'));
             framework\Event::listen('core', 'get_backdrop_partial', array($this, 'listen_getcommit'));
-            framework\Event::listen('core', 'viewissue_left_after_attachments', array($this, 'listen_viewissue_panel'));
+            framework\Event::listen('core', 'viewissue_before_tabs', array($this, 'listen_viewissue_panel_tab'));
+            framework\Event::listen('core', 'viewissue_after_tabs', array($this, 'listen_viewissue_panel'));
             framework\Event::listen('core', 'config_project_tabs_other', array($this, 'listen_projectconfig_tab'));
             framework\Event::listen('core', 'config_project_panes', array($this, 'listen_projectconfig_panel'));
             framework\Event::listen('core', 'project_header_buttons', array($this, 'listen_projectheader'));
             framework\Event::listen('core', '_notification_view', array($this, 'listen_notificationview'));
+            framework\Event::listen('core', '_notification_view_text', array($this, 'listen_notificationviewtext'));
             framework\Event::listen('core', 'thebuggenie\core\entities\Notification::getTarget', array($this, 'listen_thebuggenie_core_entities_Notification_getTarget'));
+            framework\Event::listen('core', 'thebuggenie\core\entities\Notification::getTargetUrl', array($this, 'listen_thebuggenie_core_entities_Notification_getTargetUrl'));
             framework\Event::listen('core', 'thebuggenie\core\framework\helpers\TextParser::_parse_line::char_regexes', array($this, 'listen_thebuggenie_core_helpers_textparser_char_regexes'));
             framework\Event::listen('core', 'thebuggenie\core\framework\helpers\TextParserMarkdown::transform', array($this, 'listen_thebuggenie_core_helpers_textparser_char_regexes'));
         }
@@ -127,6 +130,18 @@
         public function listen_thebuggenie_core_helpers_textparser_char_regexes(framework\Event $event)
         {
             $event->addToReturnList(array(array('/([a-f0-9]{40})/'), array($this, '_parse_commit')));
+
+            if (framework\Context::isProjectContext() && framework\Context::getModule('vcs_integration')->getSetting('browser_type_'.framework\Context::getCurrentProject()->getID()) === 'gitlab')
+            {
+              $event->addToReturnList(array(
+                array('/(\![0-9]+)/'), function ($matches) use ($event)
+                  {
+                    if (!$event->getParameter('target') instanceof Commit) return $matches[0];
+
+                    return link_tag($event->getParameter('target')->getGitlabUrlForMergeRequestID(substr($matches[0], 1)), $matches[0], array('target' => '_blank'));
+                  }
+              ));
+            }
         }
 
         protected function _getCommitLink($commit)
@@ -163,7 +178,8 @@
 
         public function listen_project_links(framework\Event $event)
         {
-            $event->addToReturnList(array('url' => framework\Context::getRouting()->generate('vcs_commitspage', array('project_key' => framework\Context::getCurrentProject()->getKey())), 'title' => framework\Context::getI18n()->__('Commits')));
+            if (framework\Context::getUser()->hasProjectPageAccess('project_commits', framework\Context::getCurrentProject()))
+                $event->addToReturnList(array('url' => framework\Context::getRouting()->generate('vcs_commitspage', array('project_key' => framework\Context::getCurrentProject()->getKey())), 'title' => framework\Context::getI18n()->__('Commits')));
         }
 
         public function listen_projectheader(framework\Event $event)
@@ -190,6 +206,15 @@
             $event->setProcessed();
         }
 
+        public function listen_notificationviewtext(framework\Event $event)
+        {
+            if ($event->getSubject()->getModuleName() != 'vcs_integration')
+                return;
+
+            include_component('vcs_integration/notification_view_text', array('notification' => $event->getSubject()));
+            $event->setProcessed();
+        }
+
         public function listen_thebuggenie_core_entities_Notification_getTarget(framework\Event $event)
         {
             if ($event->getSubject()->getModuleName() != 'vcs_integration')
@@ -199,6 +224,23 @@
             $event->setReturnValue($commit);
             $event->setProcessed();
         }
+
+        public function listen_thebuggenie_core_entities_Notification_getTargetUrl(framework\Event $event)
+        {
+            if ($event->getSubject()->getModuleName() != 'vcs_integration')
+                return;
+
+            switch ($event->getSubject()->getNotificationType()) {
+                case self::NOTIFICATION_COMMIT_MENTIONED:
+                    $event->setReturnValue(make_url('get_partial_for_backdrop', array(
+                        'key' => 'vcs_integration_getcommit', 'commit_id' => $event->getSubject()
+                          ->getTargetID()
+                      )));
+                    $event->setProcessed();
+                    break;
+            }
+        }
+
 
         public function listen_getcommit(framework\Event $event)
         {
@@ -210,13 +252,23 @@
             }
         }
 
+        public function listen_viewissue_panel_tab(framework\Event $event)
+        {
+            if (framework\Context::getModule('vcs_integration')->getSetting('vcs_mode_' . framework\Context::getCurrentProject()->getID()) == self::MODE_DISABLED)
+                return;
+
+            $links_total_count = IssueLinks::getTable()->countByIssueID($event->getSubject()->getID());
+            include_component('vcs_integration/viewissue_activities_tab', array('count' => $links_total_count));
+        }
+
         public function listen_viewissue_panel(framework\Event $event)
         {
             if (framework\Context::getModule('vcs_integration')->getSetting('vcs_mode_' . framework\Context::getCurrentProject()->getID()) == self::MODE_DISABLED)
                 return;
 
             $links = IssueLink::getCommitsByIssue($event->getSubject());
-            include_component('vcs_integration/viewissue_commits', array('links' => $links, 'projectId' => $event->getSubject()->getProject()->getID()));
+            $links_total_count = IssueLinks::getTable()->countByIssueID($event->getSubject()->getID());
+            include_component('vcs_integration/viewissue_commits', array('issue' => $event->getSubject(), 'links' => $links, 'links_total_count' => $links_total_count, 'selected_project' => $event->getSubject()->getProject()));
         }
 
         public static function processCommit(\thebuggenie\core\entities\Project $project, $commit_msg, $old_rev, $new_rev, $date = null, $changed, $author, $branch = null, \Closure $callback = null)
@@ -405,7 +457,7 @@
                     }
                 }
 
-                $issue->addSystemComment(framework\Context::getI18n()->__('This issue has been updated with the latest changes from the code repository.<source>%commit_msg</source>', array('%commit_msg' => $commit_msg)), $user->getID());
+                $issue->addSystemComment(framework\Context::getI18n()->__('This issue has been updated with the latest changes from the code repository.%commit_msg', array('%commit_msg' => '<div class="commit_main">' . $commit_msg . '</div>')), $user->getID(), 'vcs_integration');
                 $output .= '[VCS ' . $project->getKey() . '] Updated issue ' . $issue->getFormattedIssueNo() . "\n";
             }
 

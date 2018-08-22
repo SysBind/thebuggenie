@@ -6,9 +6,9 @@
             <?php endif; ?>
         </td>
         <td style="clear: both;<?php if (!isset($include_issue_title) || $include_issue_title): ?> padding-bottom: <?php echo (isset($extra_padding) && $extra_padding) ? 15 : 10; ?>px;<?php endif; ?>">
-            <?php if ((!isset($include_issue_title) || $include_issue_title) && (isset($include_time) && $include_time == true)): ?><span class="time "><?php echo tbg_formatTime($log_action['timestamp'], 19); ?></span>&nbsp;<?php endif; ?>
+            <?php if ((!isset($include_issue_title) || $include_issue_title) && (isset($include_time) && $include_time == true)): ?><span class="time"><?php echo tbg_formatTime($log_action['timestamp'], 19); ?></span>&nbsp;<?php endif; ?>
             <?php if (!isset($include_issue_title) || $include_issue_title): ?>
-                <?php if (isset($include_project) && $include_project == true): ?><span class="faded_out smaller project_key"><?php echo link_tag(make_url('project_dashboard', array('project_key' => $issue->getProject()->getKey())), $issue->getProject()->getKey()); ?></span><?php endif; ?>
+                <?php if (isset($include_project) && $include_project == true): ?><span class="faded_out smaller"><?php echo image_tag($issue->getProject()->getSmallIconName(), array('class' => 'issuelog-project-logo'), $issue->getProject()->hasSmallIcon()); ?></span><?php endif; ?>
             <?php endif; ?>
             <?php 
 
@@ -42,7 +42,7 @@
             <?php elseif (!isset($include_issue_title) || $include_issue_title): ?>
                 <br>
             <?php endif; ?>
-            <div style="line-height: 1.4; <?php if (!isset($include_issue_title) || $include_issue_title == false): ?>margin-top: -7px; margin-bottom: 10px;<?php endif; ?>">
+            <div style="line-height: 1.4; word-break: break-all; word-wrap: break-word; -ms-word-break: break-all; <?php if (!isset($include_issue_title) || $include_issue_title == false): ?>margin-top: -7px; margin-bottom: 10px;<?php endif; ?>">
             <?php
 
                 switch ($log_action['change_type'])
@@ -112,10 +112,24 @@
                         echo '<i>' . __('Issue type changed: %text', array('%text' => $log_action['text'])) . '</i>';
                         break;
                     case \thebuggenie\core\entities\tables\Log::LOG_ISSUE_TIME_ESTIMATED:
-                        echo '<i>' . __('Estimation changed: %text', array('%text' => $log_action['text'])) . '</i>';
+                        if ($log_action['previous_value'] === NULL && $log_action['current_value'] === NULL)
+                        {
+                            echo '<i>' . __('Estimation changed: %text', array('%text' => $log_action['text'])) . '</i>';
+                        }
+                        else
+                        {
+                            echo '<i>' . __('Estimation changed: %text', array('%text' => \thebuggenie\core\entities\common\Timeable::formatTimeableLog($log_action['text'], $log_action['previous_value'], $log_action['current_value'], true, true))) . '</i>';
+                        }
                         break;
                     case \thebuggenie\core\entities\tables\Log::LOG_ISSUE_TIME_SPENT:
-                        echo '<i>' . __('Time spent: %text', array('%text' => $log_action['text'])) . '</i>';
+                        if ($log_action['previous_value'] === NULL && $log_action['current_value'] === NULL)
+                        {
+                            echo '<i>' . __('Time spent: %text', array('%text' => $log_action['text'])) . '</i>';
+                        }
+                        else
+                        {
+                            echo '<i>' . __('Time spent: %text', array('%text' => \thebuggenie\core\entities\common\Timeable::formatTimeableLog($log_action['text'], $log_action['previous_value'], $log_action['current_value'], true, true))) . '</i>';
+                        }
                         break;
                     case \thebuggenie\core\entities\tables\Log::LOG_ISSUE_ASSIGNED:
                         echo '<i>' . __('Assignee changed: %text', array('%text' => $log_action['text'])) . '</i>';

@@ -1,8 +1,10 @@
 <?php
 
-    $tbg_response->setTitle('Your account details');
+    use thebuggenie\core\framework\Settings;
+
+    $tbg_response->setTitle(__('Your account details'));
     $tbg_response->addBreadcrumb(__('Account details'), make_url('account'));
-    
+
 ?>
 <?php if ($tbg_user->canChangePassword()): ?>
     <div class="fullpage_backdrop" id="change_password_div" style="<?php if (!$has_autopassword) echo 'display: none;'; ?>">
@@ -120,22 +122,34 @@
     <div style="margin: 30px 0 20px 0; table-layout: fixed; width: 100%; height: 100%;">
         <div style="clear: both;" class="tab_menu inset">
             <ul id="account_tabs">
-                <li <?php if ($selected_tab == 'profile'): ?> class="selected"<?php endif; ?> id="tab_profile"><a onclick="TBG.Main.Helpers.tabSwitcher('tab_profile', 'account_tabs');" href="javascript:void(0);"><?php echo image_tag('cfg_user_profilesettings.png').__('Profile'); ?></a></li>
-                <li id="tab_settings"><a onclick="TBG.Main.Helpers.tabSwitcher('tab_settings', 'account_tabs');" href="javascript:void(0);"><?php echo image_tag('cfg_icon_general.png').__('Settings'); ?></a></li>
+                <li <?php if ($selected_tab == 'profile'): ?> class="selected"<?php endif; ?> id="tab_profile"><a onclick="TBG.Main.Helpers.tabSwitcher('tab_profile', 'account_tabs');" href="javascript:void(0);"><?php echo fa_image_tag('pencil-square-o').__('Profile'); ?></a></li>
+                <li id="tab_settings"><a onclick="TBG.Main.Helpers.tabSwitcher('tab_settings', 'account_tabs');" href="javascript:void(0);"><?php echo fa_image_tag('cog').__('Settings'); ?></a></li>
+                <li id="tab_notificationsettings"><a onclick="TBG.Main.Helpers.tabSwitcher('tab_notificationsettings', 'account_tabs');" href="javascript:void(0);"><?php echo fa_image_tag('bell').__('Notification settings'); ?></a></li>
                 <?php \thebuggenie\core\framework\Event::createNew('core', 'account_tabs')->trigger(); ?>
                 <?php foreach (\thebuggenie\core\framework\Context::getModules() as $module_name => $module): ?>
                     <?php if ($module->hasAccountSettings()): ?>
-                        <li id="tab_settings_<?php echo $module_name; ?>"><a onclick="TBG.Main.Helpers.tabSwitcher('tab_settings_<?php echo $module_name; ?>', 'account_tabs');" href="javascript:void(0);"><?php echo image_tag($module->getAccountSettingsLogo(), array(), false, $module_name).__($module->getAccountSettingsName()); ?></a></li>
+                        <li id="tab_settings_<?php echo $module_name; ?>"><a onclick="TBG.Main.Helpers.tabSwitcher('tab_settings_<?php echo $module_name; ?>', 'account_tabs');" href="javascript:void(0);"><?php echo $module->getAccountSettingsLogo().__($module->getAccountSettingsName()); ?></a></li>
                     <?php endif; ?>
                 <?php endforeach; ?>
-                <li <?php if ($selected_tab == 'security'): ?> class="selected"<?php endif; ?> id="tab_security"><a onclick="TBG.Main.Helpers.tabSwitcher('tab_security', 'account_tabs');" href="javascript:void(0);"><?php echo image_tag('cfg_user_security.png').__('Security'); ?></a></li>
+                <li <?php if ($selected_tab == 'security'): ?> class="selected"<?php endif; ?> id="tab_security"><a onclick="TBG.Main.Helpers.tabSwitcher('tab_security', 'account_tabs');" href="javascript:void(0);"><?php echo fa_image_tag('lock').__('Security'); ?></a></li>
                 <?php if (count($tbg_user->getScopes()) > 1): ?>
-                    <li id="tab_scopes"><a onclick="TBG.Main.Helpers.tabSwitcher('tab_scopes', 'account_tabs');" href="javascript:void(0);"><?php echo image_tag('cfg_user_scopes.png').__('Scope memberships'); ?></a></li>
+                    <li id="tab_scopes"><a onclick="TBG.Main.Helpers.tabSwitcher('tab_scopes', 'account_tabs');" href="javascript:void(0);"><?php echo fa_image_tag('clone').__('Scope memberships'); ?></a></li>
                 <?php endif; ?>
             </ul>
         </div>
         <div id="account_tabs_panes">
             <div id="tab_profile_pane" style="<?php if ($selected_tab != 'profile'): ?> display: none;<?php endif; ?>">
+                <div class="header" style="margin-bottom: 5px;">
+                    <a href="javascript:void(0);" onclick="$('usermenu_changestate').toggle();" id="usermenu_changestate_toggler" class="button button-silver"><?php echo __('Change'); ?></a>
+                    <?php echo image_tag('spinning_16.gif', array('style' => 'display: none;', 'id' => 'change_userstate_dropdown')); ?>
+                    <?php echo __('You are: %userstate', array('%userstate' => '<span class="current_userstate userstate">'.__($tbg_user->getState()->getName()).'</span>')); ?>
+                </div>
+                <div id="usermenu_changestate" style="display: none;" onclick="$('usermenu_changestate').toggle();">
+                    <?php foreach (\thebuggenie\core\entities\Userstate::getAll() as $state): ?>
+                        <?php if ($state->getID() == \thebuggenie\core\framework\Settings::getOfflineState()->getID()) continue; ?>
+                        <a href="javascript:void(0);" onclick="TBG.Main.Profile.setState('<?php echo make_url('set_state', array('state_id' => $state->getID())); ?>', 'change_userstate_dropdown');"><?php echo __($state->getName()); ?></a>
+                    <?php endforeach; ?>
+                </div>
                 <?php if (\thebuggenie\core\framework\Settings::isUsingExternalAuthenticationBackend()): ?>
                     <?php echo tbg_parse_text(\thebuggenie\core\framework\Settings::get('changedetails_message'), false, null, array('embedded' => true)); ?>
                 <?php else: ?>
@@ -177,9 +191,10 @@
                             </tr>
                             <tr>
                                 <td class="config_explanation" colspan="2">
-                                    <?php echo __("The Bug Genie can use your <a href=\"http://www.gravatar.com\" target=\"_blank\">Gravatar</a> profile picture, if you have one. If you don't have one but still want to use Gravatar for profile pictures, The Bug Genie will use a Gravatar <a href=\"http://blog.gravatar.com/2008/04/22/identicons-monsterids-and-wavatars-oh-my/\" target=\"_blank\">auto-generated image unique for your email address</a>."); ?><br>
-                                    <br>
-                                    <?php echo __("Don't have a Gravatar yet? %link_to_get_one_now", array('%link_to_get_one_now' => link_tag('http://en.gravatar.com/site/signup/'.urlencode($tbg_user->getEmail()), __('Get one now!'), array('target' => '_blank')))); ?>
+                                    <?php echo __("The Bug Genie can use your %link_to_gravatar profile picture, if you have one. If you don't have one but still want to use Gravatar for profile pictures, The Bug Genie will use a Gravatar %auto_generated_image_unique_for_your_email_address. Don't have a Gravatar yet? %link_to_get_one_now",
+                                                    array('%link_to_gravatar' => link_tag('http://www.gravatar.com', 'Gravatar', ['target' => '_blank']),
+                                                        '%auto_generated_image_unique_for_your_email_address' => link_tag('http://blog.gravatar.com/2008/04/22/identicons-monsterids-and-wavatars-oh-my', __('auto-generated image unique for your email address'), ['target' => '_blank']),
+                                                        '%link_to_get_one_now' => link_tag('http://en.gravatar.com/site/signup/'.urlencode($tbg_user->getEmail()), __('Get one now!'), array('target' => '_blank')))); ?>
                                     <br>
                                     <a style="<?php if (!$tbg_user->usesGravatar()): ?>display: none; <?php endif; ?>" id="gravatar_change" href="http://en.gravatar.com/emails/" class="button button-silver">
                                         <?php echo image_tag('gravatar.png'); ?>
@@ -237,7 +252,7 @@
                         </table>
                         <div class="greybox" style="margin: 25px 0 0 0; height: 24px;">
                             <div style="float: left; font-size: 13px; padding-top: 2px;"><?php echo __('Click "%save" to save your account information', array('%save' => __('Save'))); ?></div>
-                            <input type="submit" id="submit_settings_button" style="float: right; padding: 0 10px 0 10px; font-size: 14px; font-weight: bold;" value="<?php echo __('Save'); ?>">
+                            <input type="submit" id="submit_information_button" style="float: right; padding: 0 10px 0 10px; font-size: 14px; font-weight: bold;" value="<?php echo __('Save'); ?>">
                             <span id="profile_save_indicator" style="display: none; float: right;"><?php echo image_tag('spinning_20.gif'); ?></span>
                         </div>
                     </form>
@@ -299,19 +314,207 @@
                             </td>
                         </tr>
                     </table>
-                    <h3><?php echo __('Update notifications'); ?></h3>
-                    <p><?php echo __('You will receive notifications (visible in your upper right notification area) for any issues or articles you are subscribed to, and The Bug Genie will automatically subscribe to certain issues and articles for you. Please select when you would like The Bug Genie to subscribe and / or notify you.'); ?></p>
+                    <div class="greybox" style="margin: 25px 0 0 0; height: 24px;">
+                        <div style="float: left; font-size: 13px; padding-top: 2px;"><?php echo __('Click "%save" to update the settings on this tab', array('%save' => __('Save'))); ?></div>
+                        <input type="submit" id="submit_settings_button" style="float: right; padding: 0 10px 0 10px; font-size: 14px; font-weight: bold;" value="<?php echo __('Save'); ?>">
+                        <span id="profile_settings_save_indicator" style="display: none; float: right;"><?php echo image_tag('spinning_20.gif'); ?></span>
+                    </div>
+                </form>
+            </div>
+            <div id="tab_notificationsettings_pane" style="display: none;">
+                <form accept-charset="<?php echo \thebuggenie\core\framework\Context::getI18n()->getCharset(); ?>" action="<?php echo make_url('account_save_settings'); ?>" onsubmit="TBG.Main.Profile.updateNotificationSettings('<?php echo make_url('account_save_notificationsettings'); ?>'); return false;" method="post" id="profile_notificationsettings_form">
+                    <h3><?php echo __('Subscriptions'); ?></h3>
+                    <p><?php echo __('The Bug Genie can subscribe you to issues, articles and other items in the system, so you can receive notifications when they are updated. Please select when you would like The Bug Genie to subscribe you.'); ?></p>
                     <table class="padded_table" cellpadding=0 cellspacing=0>
-                        <?php foreach ($notificationsettings as $key => $description): ?>
+                        <?php foreach ($subscriptionssettings as $key => $description): ?>
+                            <?php if (in_array($key, [Settings::SETTINGS_USER_SUBSCRIBE_NEW_ISSUES_MY_PROJECTS_CATEGORY, Settings::SETTINGS_USER_SUBSCRIBE_NEW_ISSUES_MY_PROJECTS])) continue; ?>
                             <tr>
                                 <td style="width: auto; border-bottom: 1px solid #DDD;"><label for="<?php echo $key; ?>_yes"><?php echo $description ?></label></td>
-                                <td style="width: 50px; text-align: center; border-bottom: 1px solid #DDD;" valign="middle">
-                                    <input type="checkbox" name="core_<?php echo $key; ?>" value="1" id="<?php echo $key; ?>_yes"<?php if (!$tbg_user->getNotificationSetting($key, true)->isOff()): ?> checked<?php endif; ?>>
-                                </td>
+                                <?php if ($key == \thebuggenie\core\framework\Settings::SETTINGS_USER_SUBSCRIBE_NEW_ISSUES_MY_PROJECTS_CATEGORY): ?>
+                                    <td style="width: 50px; text-align: center; border-bottom: 1px solid #DDD;" valign="middle">
+                                        <div class="filter interactive_dropdown" data-filterkey="<?php echo $key; ?>" data-value="" data-all-value="<?php echo __('All'); ?>">
+                                            <input type="hidden" name="core_<?= $key; ?>" value="" id="filter_<?php echo $key; ?>_value_input">
+                                            <label><?php echo __('Category'); ?></label>
+                                            <span class="value"><?php if (true || !$filter->hasValue()) echo __('All'); ?></span>
+                                            <div class="interactive_menu">
+                                                <h1><?php echo __('Select category'); ?></h1>
+                                                <input type="search" class="interactive_menu_filter" placeholder="<?php echo __('Filter values'); ?>">
+                                                <div class="interactive_values_container">
+                                                    <ul class="interactive_menu_values">
+                                                        <?php foreach (\thebuggenie\core\entities\Category::getAll() as $category_id => $category): ?>
+                                                            <li data-value="<?php echo $category_id; ?>" class="filtervalue<?php if (false && $filter->hasValue($category_id)) echo ' selected'; ?>">
+                                                                <?php echo image_tag('icon-mono-checked.png', array('class' => 'checked')); ?>
+                                                                <input type="checkbox" value="<?php echo $category_id; ?>" name="core_<?php echo $key; ?>_value_<?php echo $category_id; ?>" data-text="<?php echo __($category->getName()); ?>" id="core_<?php echo $key; ?>_value_<?php echo $category_id; ?>" <?php if (false && $filter->hasValue($category_id)) echo 'checked'; ?>>
+                                                                <label for="core_<?php echo $key; ?>_value_<?php echo $category_id; ?>"><?php echo __($category->getName()); ?></label>
+                                                            </li>
+                                                        <?php endforeach; ?>
+                                                    </ul>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </td>
+                                <?php else: ?>
+                                    <td style="width: 50px; text-align: center; border-bottom: 1px solid #DDD;" valign="middle">
+                                        <input type="checkbox" name="core_<?php echo $key; ?>" value="1" id="<?php echo $key; ?>_yes"<?php if (!$tbg_user->getNotificationSetting($key, true)->isOff()): ?> checked<?php endif; ?>>
+                                    </td>
+                                <?php endif; ?>
                             </tr>
                         <?php endforeach; ?>
                     </table>
-                    <?php \thebuggenie\core\framework\Event::createNew('core', 'account_pane_notificationsettings')->trigger(); ?>
+                    <?php $category_key = \thebuggenie\core\framework\Settings::SETTINGS_USER_SUBSCRIBE_NEW_ISSUES_MY_PROJECTS_CATEGORY; ?>
+                    <?php $project_issues_key = \thebuggenie\core\framework\Settings::SETTINGS_USER_SUBSCRIBE_NEW_ISSUES_MY_PROJECTS; ?>
+                    <table class="padded_table" cellpadding="0" cellspacing="0">
+                        <tr>
+                            <td style="width: auto; border-bottom: 1px solid #DDD;"><label for="<?php echo $project_issues_key; ?>_yes"><?= __('Automatically subscribe to new issues that are created in my project(s)'); ?></label></td>
+                            <td style="width: 350px; text-align: right; border-bottom: 1px solid #DDD; vertical-align: middle;">
+                                <div class="filter interactive_dropdown rightie" data-filterkey="<?php echo $project_issues_key; ?>" data-value="" data-all-value="<?php echo __('No projects'); ?>">
+                                    <input type="hidden" name="core_<?= $project_issues_key; ?>" value="<?= join(',', $selected_project_subscriptions); ?>" id="filter_<?php echo $project_issues_key; ?>_value_input">
+                                    <label><?php echo __('Projects'); ?></label>
+                                    <span class="value"><?= (empty($selected_project_subscriptions) && !$all_projects_subscription) ? __('No projects') : __('All my projects'); ?></span>
+                                    <div class="interactive_menu">
+                                        <h1><?php echo __('Select which projects to subscribe to'); ?></h1>
+                                        <input type="search" class="interactive_menu_filter" placeholder="<?php echo __('Filter projects'); ?>">
+                                        <div class="interactive_values_container">
+                                            <ul class="interactive_menu_values">
+                                                <li data-value="0" class="filtervalue <?php if ($all_projects_subscription) echo ' selected'; ?>" data-exclusive data-selection-group="1" data-exclude-group="2">
+                                                    <?php echo image_tag('icon-mono-checked.png', array('class' => 'checked')); ?>
+                                                    <input type="checkbox" value="all" name="core_<?php echo $project_issues_key; ?>_all" data-text="<?php echo __('All my projects'); ?>" id="core_<?= $project_issues_key; ?>_value_all" <?php if ($all_projects_subscription) echo 'checked'; ?>>
+                                                    <label for="core_<?= $project_issues_key; ?>_value_all"><?php echo __('All my projects'); ?></label>
+                                                </li>
+                                                <li class="separator"></li>
+                                                <?php foreach ($projects as $project_id => $project): ?>
+                                                    <li data-value="<?php echo $project_id; ?>" class="filtervalue<?php if (in_array($project_id, $selected_project_subscriptions)) echo ' selected'; ?>" data-selection-group="2" data-exclude-group="1">
+                                                        <?php echo image_tag('icon-mono-checked.png', array('class' => 'checked')); ?>
+                                                        <input type="checkbox" value="<?php echo $project_id; ?>" name="core_<?php echo $project_issues_key; ?>_<?php echo $project_id; ?>" data-text="<?php echo __($project->getName()); ?>" id="core_<?php echo $project_issues_key; ?>_value_<?php echo $project_id; ?>" <?php if (in_array($project_id, $selected_project_subscriptions)) echo 'checked'; ?>>
+                                                        <label for="core_<?php echo $project_issues_key; ?>_value_<?php echo $project_id; ?>"><?php echo __($project->getName()); ?></label>
+                                                    </li>
+                                                <?php endforeach; ?>
+                                            </ul>
+                                        </div>
+                                    </div>
+                                </div>
+                            </td>
+                        </tr>
+                        <tr>
+                            <td style="border-bottom: 1px solid #DDD;">
+                                <label for="<?php echo $category_key; ?>_yes"><?= __('Automatically subscribe to new issues in selected categories'); ?></label><br>
+                                <?= __("If you don't want to set up automatic subscriptions for all projects you're participating in, you can choose to subscribe to categories, instead. Note that if '%all_my_projects' is selected in the project subscriptions dropdown, the category subscription will have no further effect.", ['%all_my_projects' => __('All my projects')]); ?>
+                            </td>
+                            <td style="text-align: right; border-bottom: 1px solid #DDD; vertical-align: middle;">
+                                <div class="filter interactive_dropdown rightie" data-filterkey="<?php echo $category_key; ?>" data-value="" data-all-value="<?php echo __('None selected'); ?>">
+                                    <input type="hidden" name="core_<?= $category_key; ?>" value="<?= join(',', $selected_category_subscriptions); ?>" id="filter_<?php echo $category_key; ?>_value_input">
+                                    <label><?php echo __('Categories'); ?></label>
+                                    <span class="value"><?php if (empty($selected_category_subscriptions)) echo __('None selected'); ?></span>
+                                    <div class="interactive_menu">
+                                        <h1><?php echo __('Select which categories to subscribe to'); ?></h1>
+                                        <input type="search" class="interactive_menu_filter" placeholder="<?php echo __('Filter categories'); ?>">
+                                        <div class="interactive_values_container">
+                                            <ul class="interactive_menu_values">
+                                                <?php foreach ($categories as $category_id => $category): ?>
+                                                    <li data-value="<?php echo $category_id; ?>" class="filtervalue<?php if (in_array($category_id, $selected_category_subscriptions)) echo ' selected'; ?>">
+                                                        <?php echo image_tag('icon-mono-checked.png', array('class' => 'checked')); ?>
+                                                        <input type="checkbox" value="<?php echo $category_id; ?>" name="core_<?php echo $category_key; ?>_<?php echo $category_id; ?>" data-text="<?php echo __($category->getName()); ?>" id="core_<?php echo $category_key; ?>_value_<?php echo $category_id; ?>" <?php if (in_array($category_id, $selected_category_subscriptions)) echo 'checked'; ?>>
+                                                        <label for="core_<?php echo $category_key; ?>_value_<?php echo $category_id; ?>"><?php echo __($category->getName()); ?></label>
+                                                    </li>
+                                                <?php endforeach; ?>
+                                            </ul>
+                                        </div>
+                                    </div>
+                                </div>
+                            </td>
+                        </tr>
+                    </table>
+                    <h3><?php echo __('Notifications'); ?></h3>
+                    <p><?php echo __('The Bug Genie will send you notifications based on system actions and/or your subscriptions. Notifications can be received in the notifications box (the counter visible next to your avatar in the top menu) and/or via email.'); ?></p>
+                    <table class="padded_table" cellpadding=0 cellspacing=0>
+                        <thead>
+                            <tr>
+                                <th></th>
+                                <th style="white-space: nowrap; width: 120px;"><?php echo __('Notifications box'); ?></th>
+                                <?php \thebuggenie\core\framework\Event::createNew('core', 'account_pane_notificationsettings_thead')->trigger(); ?>
+                            </tr>
+                        </thead>
+                        <?php foreach ($notificationsettings as $key => $description): ?>
+                            <?php if ($key == \thebuggenie\core\framework\Settings::SETTINGS_USER_NOTIFY_NEW_ISSUES_MY_PROJECTS_CATEGORY) continue; ?>
+                            <tr>
+                                <td style="width: auto; border-bottom: 1px solid #DDD;"><label for="<?php echo $key; ?>_yes"><?php echo $description ?></label></td>
+                                <?php if ($key == \thebuggenie\core\framework\Settings::SETTINGS_USER_NOTIFY_GROUPED_NOTIFICATIONS): ?>
+                                    <td style="text-align: center; border-bottom: 1px solid #DDD;" valign="middle">
+                                        <input type="text" name="core_<?php echo $key; ?>" id="<?php echo $key; ?>_yes" value="<?php echo $tbg_user->getNotificationSetting($key, false, 'core')->getValue(); ?>" style="width:30px;">
+                                    </td>
+                                    <td style="text-align: center; border-bottom: 1px solid #DDD;" valign="middle"></td>
+                                <?php else: ?>
+                                    <td style="text-align: center; border-bottom: 1px solid #DDD;" valign="middle">
+                                        <input type="checkbox" name="core_<?php echo $key; ?>" value="1" id="<?php echo $key; ?>_yes"<?php if ($tbg_user->getNotificationSetting($key, $key == Settings::SETTINGS_USER_NOTIFY_MENTIONED, 'core')->isOn()) echo ' checked'; ?>>
+                                    </td>
+                                    <?php \thebuggenie\core\framework\Event::createNew('core', 'account_pane_notificationsettings_cell')->trigger(compact('key')); ?>
+                                <?php endif; ?>
+                            </tr>
+                        <?php endforeach; ?>
+                    </table>
+                    <?php $category_key = \thebuggenie\core\framework\Settings::SETTINGS_USER_NOTIFY_NEW_ISSUES_MY_PROJECTS_CATEGORY; ?>
+                    <table class="padded_table" cellpadding="0" cellspacing="0">
+                        <tr>
+                            <td style="width: auto; border-bottom: 1px solid #DDD; vertical-align: middle;">
+                                <label for="<?php echo $category_key; ?>_yes"><?= __('Notify to notifications box when issues are created in selected categories') ?></label><br>
+                                <?= __('If you want to be notified when an issue is created in a specific category, but do not want to automatically subscribe for updates to these issues, make sure auto-subscriptions are turned off in the "%subscriptions"-section, then use this dropdown to configure notifications.', ['%subscriptions' => __('Subscriptions')]); ?>
+                            </td>
+                            <td style="width: 350px; text-align: right; border-bottom: 1px solid #DDD; vertical-align: middle;">
+                                <label><?= __('Notifications box'); ?></label><br>
+                                <div class="filter interactive_dropdown rightie" data-filterkey="<?php echo $category_key; ?>" data-value="" data-all-value="<?php echo __('None selected'); ?>">
+                                    <input type="hidden" name="core_<?= $category_key; ?>" value="<?= join(',', $selected_category_notifications); ?>" id="filter_<?php echo $category_key; ?>_value_input">
+                                    <label><?php echo __('Categories'); ?></label>
+                                    <span class="value"><?php if (empty($selected_category_notifications)) echo __('None selected'); ?></span>
+                                    <div class="interactive_menu">
+                                        <h1><?php echo __('Select which categories to subscribe to'); ?></h1>
+                                        <input type="search" class="interactive_menu_filter" placeholder="<?php echo __('Filter categories'); ?>">
+                                        <div class="interactive_values_container">
+                                            <ul class="interactive_menu_values">
+                                                <?php foreach ($categories as $category_id => $category): ?>
+                                                    <li data-value="<?php echo $category_id; ?>" class="filtervalue<?php if (in_array($category_id, $selected_category_notifications)) echo ' selected'; ?>">
+                                                        <?php echo image_tag('icon-mono-checked.png', array('class' => 'checked')); ?>
+                                                        <input type="checkbox" value="<?php echo $category_id; ?>" name="core_<?php echo $category_key; ?>_<?php echo $category_id; ?>" data-text="<?php echo __($category->getName()); ?>" id="core_<?php echo $category_key; ?>_value_<?php echo $category_id; ?>" <?php if (in_array($category_id, $selected_category_notifications)) echo 'checked'; ?>>
+                                                        <label for="core_<?php echo $category_key; ?>_value_<?php echo $category_id; ?>"><?php echo __($category->getName()); ?></label>
+                                                    </li>
+                                                <?php endforeach; ?>
+                                            </ul>
+                                        </div>
+                                    </div>
+                                </div>
+                                <br>
+                                <?php \thebuggenie\core\framework\Event::createNew('core', 'account_pane_notificationsettings_notification_categories')->trigger(compact('categories')); ?>
+                            </td>
+                        </tr>
+                    </table>
+                    <?php \thebuggenie\core\framework\Event::createNew('core', 'account_pane_notificationsettings_subscriptions')->trigger(compact('categories')); ?>
+                    <h3><?php echo __('Desktop notifications'); ?></h3>
+                    <p><?php echo __('You can receive desktop notifications based on system actions or your subscriptions. Choose your desktop notification preferences from this section.'); ?></p>
+                    <table class="padded_table desktop-notifications-settings" cellpadding=0 cellspacing=0>
+                        <tr>
+                            <td><label for="profile_enable_desktop_notifications"><?php echo __('Enable desktop notifications'); ?></label></td>
+                            <td>
+                                <input type="button" class="button button-silver" value="<?php echo __('Grant Permission'); ?>" id="profile_enable_desktop_notifications" onclick="TBG.Main.Notifications.Web.GrantPermissionOrSendTest('<?php echo __('Test notification'); ?>', '<?php echo __('This is a test notification.'); ?>', '<?php echo \thebuggenie\core\framework\Settings::isUsingCustomFavicon() ? \thebuggenie\core\framework\Settings::getFaviconURL() : image_url('favicon.png'); ?>');">
+                            </td>
+                        </tr>
+                        <tr>
+                            <td class="config_explanation" colspan="2">
+                                <?php echo __('If your web browser supports desktop notification, The Bug Genie can show a desktop notification whenever a new notification is received. To allow this, please click the "%grant_permission" button', ['%grant_permission' => __('Grant permission')]); ?>
+                            </td>
+                        </tr>
+                    </table>
+                    <table class="padded_table desktop-notifications-settings" cellpadding=0 cellspacing=0>
+                        <tr>
+                            <td><label for="profile_enable_desktop_notifications_new_tab"><?php echo __('Open desktop notifications in new tab'); ?></label></td>
+                            <td>
+                                <input type="checkbox" name="enable_desktop_notifications_new_tab" value="1" id="profile_enable_desktop_notifications_new_tab"<?php if ($tbg_user->isDesktopNotificationsNewTabEnabled()): ?> checked<?php endif; ?>>
+                            </td>
+                        </tr>
+                        <tr>
+                            <td class="config_explanation" colspan="2">
+                                <?php echo __('Whether clicking on notification will open target url in new or current tab. Notifications which target is backdrop will not be affected and will open in current tab. By default browsers will block opening of new tab programmatically, unless you enable pop-ups.'); ?>
+                            </td>
+                        </tr>
+                    </table>
                     <div class="greybox" style="margin: 25px 0 0 0; height: 24px;">
                         <div style="float: left; font-size: 13px; padding-top: 2px;"><?php echo __('Click "%save" to update the settings on this tab', array('%save' => __('Save'))); ?></div>
                         <input type="submit" id="submit_notificationsettings_button" style="float: right; padding: 0 10px 0 10px; font-size: 14px; font-weight: bold;" value="<?php echo __('Save'); ?>">
@@ -349,55 +552,13 @@
                         </li>
                     <?php endforeach; ?>
                 </ul>
-                <?php if (\thebuggenie\core\framework\Settings::isOpenIDavailable()): ?>
-                    <h3>
-                        <?php echo __('Linked OpenID accounts'); ?>
-                        <button class="button button-silver" onclick="TBG.Main.Helpers.Backdrop.show('<?php echo make_url('get_partial_for_backdrop', array('key' => 'openid')); ?>');"><?php echo __('Link an OpenID account'); ?></button>
-                    </h3>
-                    <p><?php echo __("Via %openid you can log in to The Bug Genie by authenticating via Google, Wordpress and a lot of other websites. This means you don't have to register an account specifically for The Bug Genie, but authenticate with your existing Google, Wordpress, etc. user account instead. The Bug Genie will not receive or store your external usernames or passwords.", array('%openid' => link_tag('http://openid.net', 'OpenID'))); ?></p>
-                    <div class="faded_out" id="no_openid_accounts"<?php if (count($tbg_user->getOpenIDAccounts())): ?> style="display: none;"<?php endif; ?>><?php echo __('You have not linked your account with any external authentication providers.'); ?></div>
-                    <?php if (count($tbg_user->getOpenIDAccounts())): ?>
-                        <ul class="simple_list openid_accounts_list hover_highlight" id="openid_accounts_list">
-                        <?php foreach ($tbg_user->getOpenIDAccounts() as $identity => $details): ?>
-                            <li id="openid_account_<?php echo $details['id']; ?>">
-                                <?php if (count($tbg_user->getOpenIDAccounts()) > 1 || !$tbg_user->isOpenIDLocked()): ?>
-                                    <button class="button button-silver" onclick="TBG.Main.Helpers.Dialog.show('<?php echo __('Remove this account link?'); ?>', '<?php echo __('Do you really want to remove the link to this external account?').'<br>'.__('By doing this, it will not be possible to log into this account via this authentication provider'); ?>', {yes: {click: function() {TBG.Main.Profile.removeOpenIDIdentity('<?php echo make_url('account_remove_openid', array('openid' => $details['id'], 'csrf_token' => \thebuggenie\core\framework\Context::generateCSRFtoken())); ?>', <?php echo $details['id']; ?>);}}, no: {click: TBG.Main.Helpers.Dialog.dismiss}});"><?php echo __('Delete'); ?></button>
-                                <?php endif; ?>
-                                <?php echo image_tag('openid_providers.small/'.$details['type'].'.ico.png'); ?>
-                                <span class="openid_provider_name">
-                                    <?php if ($details['type'] == 'google' || $details['type'] == 'google_profile'): ?>
-                                        <?php echo __('Google account'); ?>
-                                    <?php elseif ($details['type'] == 'yahoo'): ?>
-                                        <?php echo __('Yahoo account'); ?>
-                                    <?php elseif ($details['type'] == 'blogger'): ?>
-                                        <?php echo __('Blogger (google) account'); ?>
-                                    <?php elseif ($details['type'] == 'wordpress'): ?>
-                                        <?php echo __('Wordpress account'); ?>
-                                    <?php elseif ($details['type'] == 'launchpad'): ?>
-                                        <?php echo __('Launchpad account'); ?>
-                                    <?php else: ?>
-                                        <?php echo __('Other OpenID provider'); ?>
-                                    <?php endif; ?>
-                                </span>
-                            </li>
-                        <?php endforeach; ?>
-                        </ul>
-                    <?php endif; ?>
-                <?php endif; ?>
             </div>
             <?php \thebuggenie\core\framework\Event::createNew('core', 'account_tab_panes')->trigger(); ?>
             <?php foreach (\thebuggenie\core\framework\Context::getModules() as $module_name => $module): ?>
                 <?php if ($module->hasAccountSettings()): ?>
                     <div id="tab_settings_<?php echo $module_name; ?>_pane" style="display: none;">
                         <form accept-charset="<?php echo \thebuggenie\core\framework\Context::getI18n()->getCharset(); ?>" action="<?php echo make_url('account_save_module_settings', array('target_module' => $module_name)); ?>" onsubmit="TBG.Main.Profile.updateModuleSettings('<?php echo make_url('account_save_module_settings', array('target_module' => $module_name)); ?>', '<?php echo $module_name; ?>'); return false;" method="post" id="profile_<?php echo $module_name; ?>_form">
-                            <div class="rounded_box borderless lightgrey cut_bottom" style="margin: 5px 0 0 0; width: 895px; border-bottom: 0;">
-                                <?php include_component("{$module_name}/accountsettings", array('module' => $module)); ?>
-                            </div>
-                            <div class="rounded_box iceblue borderless cut_top" style="margin: 0 0 5px 0; width: 895px; border-top: 0; padding: 3px; height: 26px;">
-                                <div style="float: left; font-size: 13px; padding-top: 2px;"><?php echo __('Click "%save" to save changes in the "%module_settings_name" category', array('%save' => __('Save'), '%module_settings_name' => $module->getAccountSettingsName())); ?></div>
-                                <input type="submit" id="submit_settings_button" style="float: right; padding: 0 10px 0 10px; font-size: 14px; font-weight: bold;" value="<?php echo __('Save'); ?>">
-                                <span id="profile_<?php echo $module_name; ?>_save_indicator" style="display: none; float: right;"><?php echo image_tag('spinning_20.gif'); ?></span>
-                            </div>
+                            <?php include_component("{$module_name}/accountsettings", array('module' => $module)); ?>
                         </form>
                     </div>
                 <?php endif; ?>
@@ -422,23 +583,28 @@
         </div>
     </div>
 </div>
-<?php if ($error): ?>
-    <script type="text/javascript">
-        TBG.Main.Helpers.Message.error('<?php echo __('An error occurred'); ?>', '<?php echo $error; ?>');
-    </script>
-<?php endif; ?>
-<?php if ($rsskey_generated): ?>
-    <script type="text/javascript">
-        TBG.Main.Helpers.Message.success('<?php echo __('Your RSS key has been regenerated'); ?>', '<?php echo __('All previous RSS links have been invalidated.'); ?>');
-    </script>
-<?php endif; ?>
-<?php if ($username_chosen): ?>
-    <script type="text/javascript">
-        TBG.Main.Helpers.Message.success('<?php echo __("You\'ve chosen the username \'%username\'", array('%username' => $tbg_user->getUsername())); ?>', '<?php echo __('Before you can use the new username to log in, you must pick a password via the "%change_password" button.', array('%change_password' => __('Change password'))); ?>');
-    </script>
-<?php endif; ?>
-<?php if ($openid_used): ?>
-    <script type="text/javascript">
-        TBG.Main.Helpers.Message.error('<?php echo __('This OpenID identity is already in use'); ?>', '<?php echo __('Someone is already using this identity. Check to see if you have already added this account.'); ?>');
-    </script>
-<?php endif; ?>
+<script type="text/javascript">
+    var TBG, jQuery;
+    require(['domReady', 'thebuggenie/tbg', 'jquery', 'jquery.nanoscroller'], function (domReady, tbgjs, jquery, nanoscroller) {
+        domReady(function () {
+            TBG = tbgjs;
+
+            $$('.filter').each(function (filter) {
+                TBG.Search.initializeFilterField(filter);
+            });
+
+            <?php if ($error): ?>
+                TBG.Main.Helpers.Message.error('<?php echo __('An error occurred'); ?>', '<?php echo $error; ?>');
+            <?php endif; ?>
+            <?php if ($rsskey_generated): ?>
+                TBG.Main.Helpers.Message.success('<?php echo __('Your RSS key has been regenerated'); ?>', '<?php echo __('All previous RSS links have been invalidated.'); ?>');
+            <?php endif; ?>
+            <?php if ($username_chosen): ?>
+                TBG.Main.Helpers.Message.success('<?php echo __("You\'ve chosen the username \'%username\'", array('%username' => $tbg_user->getUsername())); ?>', '<?php echo __('Before you can use the new username to log in, you must pick a password via the "%change_password" button.', array('%change_password' => __('Change password'))); ?>');
+            <?php endif; ?>
+            <?php if ($openid_used): ?>
+                TBG.Main.Helpers.Message.error('<?php echo __('This OpenID identity is already in use'); ?>', '<?php echo __('Someone is already using this identity. Check to see if you have already added this account.'); ?>');
+            <?php endif; ?>
+        });
+    });
+</script>

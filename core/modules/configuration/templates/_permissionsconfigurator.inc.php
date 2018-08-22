@@ -21,13 +21,14 @@
         <ul>
             <?php include_component('configuration/permissionsblock', array('base_id' => $mode.'_'.$base_id . 'page_permissions', 'permissions_list' => \thebuggenie\core\framework\Context::getAvailablePermissions('pages'), 'mode' => 'pages', 'target_id' => 0, 'module' => 'core', 'user_id' => $user_id, 'team_id' => $team_id, 'access_level' => $access_level)); ?>
             <?php include_component('configuration/permissionsblock', array('base_id' => $mode.'_'.$base_id . 'configuration_permissions', 'permissions_list' => \thebuggenie\core\framework\Context::getAvailablePermissions('configuration'), 'mode' => 'configuration', 'target_id' => 0, 'module' => 'core', 'user_id' => $user_id, 'team_id' => $team_id, 'access_level' => $access_level)); ?>
-            <?php include_component('configuration/permissionsblock', array('base_id' => $mode.'_'.$base_id . 'project_page_permissions', 'permissions_list' => \thebuggenie\core\framework\Context::getAvailablePermissions('project_pages'), 'mode' => 'project_pages', 'target_id' => 0, 'module' => 'core', 'user_id' => $user_id, 'team_id' => $team_id, 'access_level' => $access_level)); ?>
+            <?php //include_component('configuration/permissionsblock', array('base_id' => $mode.'_'.$base_id . 'project_page_permissions', 'permissions_list' => \thebuggenie\core\framework\Context::getAvailablePermissions('project_pages'), 'mode' => 'project_pages', 'target_id' => 0, 'module' => 'core', 'user_id' => $user_id, 'team_id' => $team_id, 'access_level' => $access_level)); ?>
         </ul>
     </div>
     <div id="<?php echo $mode; ?>_<?php echo $base_id; ?>_tab_modules_pane" class="tab_pane" style="display: none;">
         <p><?php echo __('Module-specific permissions are also available from the "%configure_modules" configuration page', array('%configure_modules' => link_tag(make_url('configure_modules'), __('Configure modules')))); ?></p>
         <ul>
         <?php foreach (\thebuggenie\core\framework\Context::getModules() as $module_key => $module): ?>
+            <?php if (!count($module->getAvailablePermissions())) continue; ?>
             <li>
                 <a href="javascript:void(0);" onclick="$('<?php echo $mode.'_'.$base_id; ?>_module_permission_details_<?php echo $module_key; ?>').toggle();"><?php echo image_tag('icon_project_permissions.png', array('style' => 'float: right;')); ?><?php echo $module->getLongName(); ?> <span class="faded_out smaller"><?php echo $module_key; ?></span></a>
                 <ul style="display: none;" id="<?php echo $mode.'_'.$base_id; ?>_module_permission_details_<?php echo $module_key; ?>">
@@ -38,6 +39,10 @@
         </ul>
     </div>
     <div id="<?php echo $mode.'_'.$base_id; ?>_tab_projects_pane" class="tab_pane" style="display: none;">
+        <div class="permissions_warning">
+            <strong><?php echo __('Warning'); ?></strong>
+            <p><?php echo __('The recommended way to set project-specific permissions is to use roles. Assigning teams and users to projects with a specific role keeps all permissions synchronized with roles, whereas editing it from here should only be done in very specific scenarios.'); ?></p>
+        </div>
         <p><?php echo __('These permissions control what you can do, and which pages you can access in The Bug Genie - on a project-specific basis. Some of these permissions are also available as site-wide permissions, from the "%general_permissions" tab.', array('%general_permissions' => '<i>'.__('General permissions').'</i>')); ?></p>
         <?php if (count(\thebuggenie\core\entities\Project::getAll()) > 0): ?>
             <ul>
@@ -46,7 +51,7 @@
                         <a href="javascript:void(0);" onclick="$('<?php echo $base_id; ?>_project_permission_details_<?php echo $project->getID(); ?>').toggle();"><?php echo image_tag('expand_small.png', array('style' => 'float: left; margin-right: 5px; margin-top: 2px;')); ?><?php echo $project->getName(); ?> <span class="faded_out smaller"><?php echo $project->getKey(); ?></span></a>
                         <ul style="display: none;" id="<?php echo $base_id; ?>_project_permission_details_<?php echo $project->getID(); ?>">
                             <?php include_component('configuration/permissionsblock', array('base_id' => $base_id . 'project_' . $project->getID() . '_project_permissions', 'permissions_list' => \thebuggenie\core\framework\Context::getAvailablePermissions('project'), 'mode' => 'general', 'target_id' => $project->getID(), 'module' => 'core', 'user_id' => $user_id, 'access_level' => $access_level)); ?>
-                            <?php include_component('configuration/permissionsblock', array('base_id' => $base_id . 'project_' . $project->getID() . '_page_permissions', 'permissions_list' => \thebuggenie\core\framework\Context::getAvailablePermissions('project_pages'), 'mode' => 'project_pages', 'target_id' => $project->getID(), 'module' => 'core', 'user_id' => $user_id, 'access_level' => $access_level)); ?>
+                            <?php //include_component('configuration/permissionsblock', array('base_id' => $base_id . 'project_' . $project->getID() . '_page_permissions', 'permissions_list' => \thebuggenie\core\framework\Context::getAvailablePermissions('project_pages'), 'mode' => 'project_pages', 'target_id' => $project->getID(), 'module' => 'core', 'user_id' => $user_id, 'access_level' => $access_level)); ?>
                             <?php include_component('configuration/permissionsblock', array('base_id' => $base_id . 'project_' . $project->getID() . '_issue_permissions', 'permissions_list' => \thebuggenie\core\framework\Context::getAvailablePermissions('issues'), 'mode' => 'general', 'target_id' => $project->getID(), 'module' => 'core', 'user_id' => $user_id, 'access_level' => $access_level)); ?>
                         </ul>
                     </li>

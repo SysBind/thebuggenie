@@ -15,6 +15,11 @@
     class Components extends framework\ActionComponent
     {
 
+        public function componentIssueLogItem()
+        {
+            $this->showtrace = (date('YmdHis', $this->previous_time) != date('YmdHis', $this->item->getTime()));
+        }
+
         public function componentUserdropdown()
         {
             framework\Logging::log('user dropdown component');
@@ -232,6 +237,8 @@
                     elseif ($customdatatype->hasPredefinedOptions())
                     {
                         $customfields_list[$key]['name'] = ($customvalue instanceof entities\common\Identifiable) ? $customvalue->getName() : '';
+                        $customfields_list[$key]['value'] = ($customvalue instanceof entities\common\Identifiable) ? $customvalue->getId() : '';
+                        $customfields_list[$key]['identifiable'] = ($customvalue instanceof entities\common\Identifiable) ? $customvalue : null;
                         $customfields_list[$key]['name_visible'] = (bool) ($customvalue instanceof entities\common\Identifiable);
                         $customfields_list[$key]['noname_visible'] = (bool) (!$customvalue instanceof entities\common\Identifiable);
                         $customfields_list[$key]['choices'] = $customdatatype->getOptions();
@@ -404,6 +411,22 @@
             }
             $this->num_unread = $this->getUser()->getNumberOfUnreadNotifications();
             $this->num_read = $this->getUser()->getNumberOfReadNotifications();
+            $this->desktop_notifications_new_tab = $this->getUser()->isDesktopNotificationsNewTabEnabled();
+        }
+
+        public function componentNotification_text()
+        {
+            $this->return_notification = true;
+
+            if ($this->notification->isShown())
+            {
+                $this->return_notification = false;
+            }
+            else
+            {
+                $this->notification->showOnce();
+                $this->notification->save();
+            }
         }
 
         public function componentFindduplicateissues()
@@ -418,7 +441,7 @@
 
         public function componentLogitem()
         {
-            if ($this->log_action['target_type'] == 1)
+            if ($this->log_action['target_type'] == tables\Log::TYPE_ISSUE)
             {
                 try
                 {
@@ -510,23 +533,23 @@
 
             if (framework\Settings::isLoginRequired())
             {
-                framework\Context::getResponse()->deleteCookie('tbg3_username');
-                framework\Context::getResponse()->deleteCookie('tbg3_password');
+                $authentication_backend = framework\Settings::getAuthenticationBackend();
+                if ($authentication_backend->getAuthenticationMethod() == entities\common\AuthenticationProviderInterface::AUTHENTICATION_TYPE_TOKEN)
+                {
+                    framework\Context::getResponse()->deleteCookie('username');
+                    framework\Context::getResponse()->deleteCookie('session_token');
+                }
+                else
+                {
+                    framework\Context::getResponse()->deleteCookie('username');
+                    framework\Context::getResponse()->deleteCookie('password');
+                }
                 $this->error = framework\Context::geti18n()->__('You need to log in to access this site');
             }
-            elseif (!framework\Context::getUser()->isAuthenticated())
-            {
-                $this->error = framework\Context::geti18n()->__('Please log in');
-            }
-            else
-            {
-                //$this->error = framework\Context::geti18n()->__('Please log in');
-            }
-        }
 
-        public function componentOpenidButtons()
-        {
-            $this->openidintro = \thebuggenie\modules\publish\entities\tables\Articles::getTable()->getArticleByName('OpenidIntro');
+            if (framework\Context::hasMessage('login_error')) {
+                $this->error = framework\Context::getMessageAndClear('login_error');
+            }
         }
 
         public function componentLoginRegister()
@@ -546,7 +569,7 @@
             $project = $this->issue->getProject();
             $this->editions = $project->getEditions();
             $this->components = $project->getComponents();
-            $this->builds = $project->getBuilds();
+            $this->builds = $project->getActiveBuilds();
         }
 
         public function componentDashboardview()
@@ -600,6 +623,7 @@
             $this->resolutions = entities\Resolution::getAll();
             $this->statuses = entities\Status::getAll();
             $this->milestones = framework\Context::getCurrentProject()->getMilestonesForIssues();
+            $this->al_items = array();
         }
 
         public function componentReportIssue()
@@ -621,11 +645,6 @@
         }
 
         public function componentConfirmUsername()
-        {
-
-        }
-
-        public function componentOpenID()
         {
 
         }
@@ -687,6 +706,8 @@
                     list($more_actions, $limit_to_target) = tables\Log::getTable()->getByUserID($this->getUser()->getID(), 10, 10 * $i + 10, $limit_to_target);
                     $i++;
 
+                    if (!count($more_actions)) break;
+
                     $actions = array_merge($actions, $more_actions);
 
                     if (count($limit_to_target) >= 10) break;
@@ -716,23 +737,27 @@
 
         public function componentIssueEstimator()
         {
+            $times = array();
             switch ($this->field)
             {
                 case 'estimated_time':
-                    $this->months = $this->issue->getEstimatedMonths();
-                    $this->weeks = $this->issue->getEstimatedWeeks();
-                    $this->days = $this->issue->getEstimatedDays();
-                    $this->hours = $this->issue->getEstimatedHours();
+                    $times['months'] = $this->issue->getEstimatedMonths();
+                    $times['weeks'] = $this->issue->getEstimatedWeeks();
+                    $times['days'] = $this->issue->getEstimatedDays();
+                    $times['hours'] = $this->issue->getEstimatedHours();
+                    $times['minutes'] = $this->issue->getEstimatedMinutes();
                     $this->points = $this->issue->getEstimatedPoints();
                     break;
-                case 'spent_time':
-                    $this->months = 0;
-                    $this->weeks = 0;
-                    $this->days = 0;
-                    $this->hours = 0;
+                case 'spent_time';
+                    $times['months'] = 0;
+                    $times['weeks'] = 0;
+                    $times['days'] = 0;
+                    $times['hours'] = 0;
+                    $times['minutes'] = 0;
                     $this->points = 0;
                     break;
             }
+            $this->times = $times;
             $this->project_key = $this->issue->getProject()->getKey();
             $this->issue_id = $this->issue->getID();
         }
