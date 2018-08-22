@@ -1,0 +1,15 @@
+version: '3'
+
+services:
+  front:
+    image: nginx:alpine
+    ports:
+    - "8000:80"
+
+    
+  web:
+    image: sysbind/thebuggenie:latest
+    build: .
+
+database:
+    image: postgres:alpine
