@@ -1,5 +1,5 @@
 FROM php:7.2-apache
-RUN apt update -y && apt install -y libpq-dev libpng-dev
+RUN apt update -y && apt install -y libpq-dev libpng-dev git
 RUN docker-php-ext-install gd
 RUN docker-php-ext-install pdo_pgsql
 
