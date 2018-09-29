@@ -11,4 +11,4 @@ RUN php -r "copy('https://getcomposer.org/installer', 'composer-setup.php');" &&
 
 RUN cd /var/www/tbg && composer install
 VOLUME ["/data"]
-RUN ln -sv /var/www/tbg/files /data
+RUN ln -fsv /data/files /var/www/tbg/files 
