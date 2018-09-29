@@ -1,0 +1,7 @@
+b2db:
+    username: tbg
+    password: "kOUUydZ2tGU9coNcqOoV"
+    dsn: "pgsql:host=database;dbname=tbg"
+    tableprefix: ''
+    cacheclass: 'TBGCache'
+
