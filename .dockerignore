@@ -1,5 +1,6 @@
 .git
 Dockerfile
 .dockerignore
-vendor
+./vendor
 *~
+./installed
