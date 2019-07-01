@@ -1,0 +1,6 @@
+b2db:
+    username: postgres
+    password: "q1w2e3r4"
+    dsn: "pgsql:host=database;dbname=tbg"
+    tableprefix: ''
+    cacheclass: 'TBGCache'
